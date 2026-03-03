@@ -78,9 +78,9 @@ export const QMatrixInspector: React.FC<QMatrixInspectorProps> = ({
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>State</th>
+              <th style={{ ...styles.th, width: '25%' }}>State</th>
               {ACTION_LABELS.map((label) => (
-                <th key={label} style={styles.th}>
+                <th key={label} style={{ ...styles.th, width: '15%' }}>
                   {label}
                 </th>
               ))}
@@ -183,6 +183,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   table: {
     width: '100%',
+    tableLayout: 'fixed' as const,
     borderCollapse: 'collapse' as const,
     fontFamily: 'monospace',
     fontSize: 11,
