@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- === Bender (left side, scaled down) === -->
+  <g transform="translate(-8, 5) scale(0.7)">
+    <!-- Antenna -->
+    <line x1="45" y1="8" x2="45" y2="20" stroke="#666" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="45" cy="6" r="3" fill="#888"/>
+    <!-- Head -->
+    <rect x="18" y="20" width="54" height="48" rx="13" ry="13" fill="#8fa4b0"/>
+    <rect x="18" y="20" width="54" height="48" rx="13" ry="13" fill="none" stroke="#6e8794" stroke-width="2"/>
+    <!-- Visor -->
+    <rect x="24" y="33" width="42" height="15" rx="7" ry="7" fill="#d4d4d4" stroke="#999" stroke-width="1.5"/>
+    <!-- Eyes -->
+    <circle cx="36" cy="40" r="5.5" fill="white" stroke="#555" stroke-width="1.5"/>
+    <circle cx="54" cy="40" r="5.5" fill="white" stroke="#555" stroke-width="1.5"/>
+    <circle cx="37" cy="40" r="2.2" fill="#222"/>
+    <circle cx="55" cy="40" r="2.2" fill="#222"/>
+    <!-- Mouth -->
+    <rect x="28" y="54" width="34" height="10" rx="3" ry="3" fill="#c0c8cc" stroke="#7a8e98" stroke-width="1"/>
+    <line x1="34" y1="54" x2="34" y2="64" stroke="#7a8e98" stroke-width="1"/>
+    <line x1="40" y1="54" x2="40" y2="64" stroke="#7a8e98" stroke-width="1"/>
+    <line x1="45" y1="54" x2="45" y2="64" stroke="#7a8e98" stroke-width="1"/>
+    <line x1="50" y1="54" x2="50" y2="64" stroke="#7a8e98" stroke-width="1"/>
+    <line x1="56" y1="54" x2="56" y2="64" stroke="#7a8e98" stroke-width="1"/>
+    <!-- Body -->
+    <rect x="24" y="68" width="42" height="16" rx="4" ry="4" fill="#8fa4b0" stroke="#6e8794" stroke-width="1.5"/>
+    <!-- Arm reaching right -->
+    <rect x="60" y="72" width="28" height="6" rx="3" ry="3" fill="#8fa4b0" stroke="#6e8794" stroke-width="1"/>
+  </g>
+  <!-- === Beer can (right side) === -->
+  <g transform="translate(14, 8) scale(0.6)">
+    <rect x="68" y="24" width="32" height="52" rx="4" ry="4" fill="#e8e8e8" stroke="#bbb" stroke-width="1.5"/>
+    <ellipse cx="84" cy="26" rx="14.5" ry="3" fill="#d0d0d0" stroke="#bbb" stroke-width="1"/>
+    <ellipse cx="84" cy="25" rx="4" ry="1.8" fill="#ccc" stroke="#aaa" stroke-width="0.8"/>
+    <rect x="70" y="34" width="28" height="30" rx="2" ry="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
+    <path d="M70,42 Q84,37 98,42 L98,50 Q84,45 70,50 Z" fill="#3a6fb0"/>
+    <rect x="70" y="51" width="28" height="2.5" fill="#c0392b"/>
+    <rect x="70" y="37" width="28" height="2.5" fill="#c0392b"/>
+    <polygon points="84,40 85.2,42.5 88,43 86,44.8 86.4,47.5 84,46 81.6,47.5 82,44.8 80,43 82.8,42.5" fill="white"/>
+    <ellipse cx="84" cy="74" rx="14.5" ry="2.5" fill="#ccc" stroke="#bbb" stroke-width="1"/>
+    <rect x="73" y="28" width="3" height="44" rx="1.5" ry="1.5" fill="rgba(255,255,255,0.25)"/>
+  </g>
+</svg>

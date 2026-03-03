@@ -10,20 +10,71 @@ interface BoardProps {
 }
 
 // ---------------------------------------------------------------------------
-// Colors
+// Sprite loader (SVG character sprites only)
+// ---------------------------------------------------------------------------
+
+const SPRITE_PATHS = {
+  beer: '/sprites/beer.svg',
+  bender: '/sprites/bender.svg',
+  benderAndBeer: '/sprites/bender-and-beer.svg',
+} as const;
+
+type SpriteMap = Record<keyof typeof SPRITE_PATHS, HTMLImageElement>;
+
+function loadSprites(): Promise<SpriteMap> {
+  const entries = Object.entries(SPRITE_PATHS) as [keyof typeof SPRITE_PATHS, string][];
+  const promises = entries.map(
+    ([key, src]) =>
+      new Promise<[keyof typeof SPRITE_PATHS, HTMLImageElement]>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve([key, img]);
+        img.onerror = reject;
+        img.src = src;
+      }),
+  );
+  return Promise.all(promises).then((pairs) =>
+    Object.fromEntries(pairs) as SpriteMap,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Canvas-drawn tile backgrounds (replaces PNG tilesets)
+// ---------------------------------------------------------------------------
+
+/** Fills a cell with a solid color and a colored border. */
+function drawTileBackground(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  fillColor: string,
+  borderColor: string,
+) {
+  const border = Math.max(2, size * 0.06);
+  // Outer border
+  ctx.fillStyle = borderColor;
+  ctx.fillRect(x, y, size, size);
+  // Inner fill
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + border, y + border, size - border * 2, size - border * 2);
+}
+
+// Tile color schemes matching the original sprites
+const TILE = {
+  unexplored: { fill: '#c8c8c8', border: '#808080' },  // gray border (like bg-unexplored)
+  explored:   { fill: '#c8c8c8', border: '#3a6fb0' },  // blue border (like bg-explored)
+  current:    { fill: '#c8c8c8', border: '#3a8a3a' },  // green border (like bg-current)
+};
+
+// ---------------------------------------------------------------------------
+// Other colors
 // ---------------------------------------------------------------------------
 
 const COLORS = {
   background: '#1a1a2e',
-  wall: '#444444',
-  empty: '#2a2a3e',
-  can: '#ffd700',
-  bender: '#4caf50',
-  benderOnCan: '#4caf50',
   gridLine: '#333355',
   labelText: '#888',
-  benderText: '#fff',
-  canIndicator: '#ffd700',
+  wallStroke: '#444',
 };
 
 // ---------------------------------------------------------------------------
@@ -33,6 +84,26 @@ const COLORS = {
 export const Board: React.FC<BoardProps> = ({ boardState }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const spritesRef = useRef<SpriteMap | null>(null);
+  const visitedRef = useRef<Set<string>>(new Set());
+
+  // Load sprites once
+  useEffect(() => {
+    loadSprites().then((sprites) => {
+      spritesRef.current = sprites;
+      draw();
+    });
+  }, []);
+
+  // Track visited cells — reset when board goes null (new episode/reset)
+  useEffect(() => {
+    if (!boardState) {
+      visitedRef.current.clear();
+      return;
+    }
+    const [bx, by] = boardState.benderPosition;
+    visitedRef.current.add(`${bx},${by}`);
+  }, [boardState]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -41,6 +112,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const sprites = spritesRef.current;
     const size = canvas.width;
     const labelMargin = 30;
     const gridSize = size - labelMargin;
@@ -64,10 +136,8 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     }
 
     // Draw row labels (1-10) on left
-    // The board coordinate system: board[x][y] where y=0 is bottom, y=9 is top
-    // We render y=9 at the top of the canvas and y=0 at the bottom
     for (let y = 0; y < 10; y++) {
-      const canvasRow = 9 - y; // flip so y=9 is at top
+      const canvasRow = 9 - y;
       ctx.fillText(
         String(y + 1),
         labelMargin / 2,
@@ -78,84 +148,84 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     // Draw cells
     for (let x = 0; x < 10; x++) {
       for (let y = 0; y < 10; y++) {
-        const canvasRow = 9 - y; // flip y
+        const canvasRow = 9 - y;
         const cellX = labelMargin + x * cellSize;
         const cellY = labelMargin + canvasRow * cellSize;
+        const inset = 1;
+        const drawX = cellX + inset;
+        const drawY = cellY + inset;
+        const drawSize = cellSize - inset * 2;
 
-        // Determine cell type
-        let fillColor = COLORS.empty;
         let hasCan = false;
         let hasBender = false;
-        let hasWall = false;
 
         if (boardState) {
           const cell = boardState.board[x][y];
           hasCan = cell.hasCan;
           hasBender = cell.hasBender;
-          hasWall = cell.walls.length > 0;
-
-          if (hasBender) {
-            fillColor = COLORS.bender;
-          } else if (hasCan) {
-            fillColor = COLORS.can;
-          } else if (hasWall) {
-            fillColor = COLORS.wall;
-          } else {
-            fillColor = COLORS.empty;
-          }
         }
 
-        // Fill cell
-        ctx.fillStyle = fillColor;
-        ctx.fillRect(cellX + 1, cellY + 1, cellSize - 2, cellSize - 2);
-
-        // Draw wall indicators as darker borders on restricted sides
-        if (boardState && hasWall) {
-          const cell = boardState.board[x][y];
-          ctx.strokeStyle = '#666';
-          ctx.lineWidth = 3;
-          for (const wall of cell.walls) {
-            ctx.beginPath();
-            if (wall === 'Left') {
-              ctx.moveTo(cellX, cellY);
-              ctx.lineTo(cellX, cellY + cellSize);
-            } else if (wall === 'Right') {
-              ctx.moveTo(cellX + cellSize, cellY);
-              ctx.lineTo(cellX + cellSize, cellY + cellSize);
-            } else if (wall === 'Up') {
-              // Up in board coords = top in canvas (since we flipped)
-              ctx.moveTo(cellX, cellY);
-              ctx.lineTo(cellX + cellSize, cellY);
-            } else if (wall === 'Down') {
-              // Down in board coords = bottom in canvas
-              ctx.moveTo(cellX, cellY + cellSize);
-              ctx.lineTo(cellX + cellSize, cellY + cellSize);
-            }
-            ctx.stroke();
-          }
-        }
-
-        // Draw Bender indicator
+        // Background tile (canvas-drawn)
+        let tile = TILE.unexplored;
         if (hasBender) {
-          ctx.fillStyle = COLORS.benderText;
-          ctx.font = `bold ${Math.max(12, cellSize * 0.45)}px monospace`;
+          tile = TILE.current;
+        } else if (visitedRef.current.has(`${x},${y}`)) {
+          tile = TILE.explored;
+        }
+        drawTileBackground(ctx, drawX, drawY, drawSize, tile.fill, tile.border);
+
+        // Character/item sprite on top of background
+        if (sprites) {
+          // Slight padding so sprite doesn't fill entire cell
+          const pad = drawSize * 0.08;
+          const spriteX = drawX + pad;
+          const spriteY = drawY + pad;
+          const spriteSize = drawSize - pad * 2;
+
+          if (hasBender && hasCan) {
+            ctx.drawImage(sprites.benderAndBeer, spriteX, spriteY, spriteSize, spriteSize);
+          } else if (hasBender) {
+            ctx.drawImage(sprites.bender, spriteX, spriteY, spriteSize, spriteSize);
+          } else if (hasCan) {
+            ctx.drawImage(sprites.beer, spriteX, spriteY, spriteSize, spriteSize);
+          }
+        } else {
+          // Fallback text indicators before sprites load
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('B', cellX + cellSize / 2, cellY + cellSize / 2);
+          ctx.font = `bold ${Math.max(12, cellSize * 0.45)}px monospace`;
+          if (hasBender) {
+            ctx.fillStyle = '#2a6e2a';
+            ctx.fillText('B', cellX + cellSize / 2, cellY + cellSize / 2);
+          } else if (hasCan) {
+            ctx.fillStyle = '#3a6fb0';
+            ctx.fillText('C', cellX + cellSize / 2, cellY + cellSize / 2);
+          }
+        }
 
-          // If Bender is on a can, draw a small can indicator
-          if (hasCan) {
-            ctx.fillStyle = COLORS.canIndicator;
-            const dotR = Math.max(3, cellSize * 0.1);
-            ctx.beginPath();
-            ctx.arc(
-              cellX + cellSize - dotR - 3,
-              cellY + dotR + 3,
-              dotR,
-              0,
-              Math.PI * 2,
-            );
-            ctx.fill();
+        // Draw wall indicators on restricted sides
+        if (boardState) {
+          const cell = boardState.board[x][y];
+          if (cell.walls.length > 0) {
+            ctx.strokeStyle = COLORS.wallStroke;
+            ctx.lineWidth = 3;
+            for (const wall of cell.walls) {
+              ctx.beginPath();
+              if (wall === 'Left') {
+                ctx.moveTo(cellX, cellY);
+                ctx.lineTo(cellX, cellY + cellSize);
+              } else if (wall === 'Right') {
+                ctx.moveTo(cellX + cellSize, cellY);
+                ctx.lineTo(cellX + cellSize, cellY + cellSize);
+              } else if (wall === 'Up') {
+                ctx.moveTo(cellX, cellY);
+                ctx.lineTo(cellX + cellSize, cellY);
+              } else if (wall === 'Down') {
+                ctx.moveTo(cellX, cellY + cellSize);
+                ctx.lineTo(cellX + cellSize, cellY + cellSize);
+              }
+              ctx.stroke();
+            }
           }
         }
       }
@@ -165,13 +235,11 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     ctx.strokeStyle = COLORS.gridLine;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 10; i++) {
-      // Vertical lines
       ctx.beginPath();
       ctx.moveTo(labelMargin + i * cellSize, labelMargin);
       ctx.lineTo(labelMargin + i * cellSize, labelMargin + gridSize);
       ctx.stroke();
 
-      // Horizontal lines
       ctx.beginPath();
       ctx.moveTo(labelMargin, labelMargin + i * cellSize);
       ctx.lineTo(labelMargin + gridSize, labelMargin + i * cellSize);
@@ -199,7 +267,6 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
 
     resizeObserver.observe(container);
 
-    // Initial sizing
     const width = container.clientWidth;
     const size = Math.min(width, 600);
     canvas.width = size;
