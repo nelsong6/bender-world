@@ -14,7 +14,6 @@ import {
   MoveType,
   MoveResult,
   MOVE_GRID_ADJUSTMENT,
-  MOVES_BY_ORDER,
 } from './types';
 import {
   getPerceptionKeyFromPercepts,

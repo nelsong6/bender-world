@@ -235,14 +235,9 @@ export class AlgorithmRunner {
     }
 
     const epsilonAtStart = this._currentEpsilon;
-    const episodeNumber = this._currentEpisode + 1; // The episode that will run
-
     // If we're mid-episode, finish it first
     // (In normal usage, runEpisode is called at episode boundaries)
     let stepsUsed = 0;
-
-    // Run steps until the episode changes or algorithm ends
-    const startEpisode = this._currentEpisode;
     let lastStep: StepResult | null = null;
 
     // The first runStep call may trigger startNewEpisode if we were at the limit
