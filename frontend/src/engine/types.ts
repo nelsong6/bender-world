@@ -88,15 +88,24 @@ export enum MoveResult {
 }
 
 /**
- * Reward values for each move result.
+ * Reward configuration: maps each move result to its reward value.
+ * Configurable per-run to allow experimentation.
+ */
+export type RewardConfig = Record<MoveResult, number>;
+
+/**
+ * Default reward values for each move result.
  * Corresponds to C# ReinforcementFactors.list.
  */
-export const REWARD_MAP: Record<MoveResult, number> = {
+export const DEFAULT_REWARD_CONFIG: RewardConfig = {
   [MoveResult.HitWall]: -5,
   [MoveResult.CanCollected]: 10,
   [MoveResult.CanMissing]: -1,
   [MoveResult.MoveSuccessful]: 0,
 };
+
+/** @deprecated Use DEFAULT_REWARD_CONFIG instead */
+export const REWARD_MAP = DEFAULT_REWARD_CONFIG;
 
 /**
  * Configuration for the Q-Learning algorithm.
@@ -113,6 +122,10 @@ export interface AlgorithmConfig {
   episodeLimit: number;
   /** Maximum number of steps per episode. C# step_limit_data. */
   stepLimit: number;
+  /** Optional custom reward values. Defaults to DEFAULT_REWARD_CONFIG. */
+  rewards?: RewardConfig;
+  /** Optional PRNG seed for deterministic replay. Generated randomly if omitted. */
+  seed?: number;
 }
 
 /**
@@ -155,4 +168,29 @@ export interface EpisodeSummary {
   cansCollected: number;
   stepsUsed: number;
   epsilonAtStart: number;
+}
+
+/**
+ * Snapshot of the board state at a point in time, for history replay.
+ */
+export interface BoardStateSnapshot {
+  board: { hasCan: boolean; hasBender: boolean; walls: MoveType[] }[][];
+  benderPosition: [number, number];
+  perceptionKey: string;
+}
+
+/**
+ * A single step's data for history replay.
+ */
+export interface StepSnapshot {
+  stepResult: StepResult;
+  boardState: BoardStateSnapshot;
+}
+
+/**
+ * History of a single episode's steps, for replay.
+ */
+export interface EpisodeHistory {
+  episodeNumber: number;
+  steps: StepSnapshot[];
 }

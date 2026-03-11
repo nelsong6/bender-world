@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import type { BoardState } from '../hooks/use-algorithm';
+import type { BoardState } from '../hooks/use-buffered-algorithm';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -14,9 +14,9 @@ interface BoardProps {
 // ---------------------------------------------------------------------------
 
 const SPRITE_PATHS = {
-  beer: '/sprites/beer.svg',
-  bender: '/sprites/bender.svg',
-  benderAndBeer: '/sprites/bender-and-beer.svg',
+  beer: '/sprites/beer.png',
+  bender: '/sprites/bender.png',
+  benderAndBeer: '/sprites/bender-and-beer.png',
 } as const;
 
 type SpriteMap = Record<keyof typeof SPRITE_PATHS, HTMLImageElement>;

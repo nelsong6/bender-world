@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { AlgorithmConfig, DEFAULT_CONFIG } from '../engine/types';
-import type { Preset } from '../api/client';
+import { AlgorithmConfig, DEFAULT_CONFIG, MoveResult, DEFAULT_REWARD_CONFIG } from '../engine/types';
+import { PRESETS } from '../data/presets';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -9,8 +9,6 @@ import type { Preset } from '../api/client';
 interface ConfigPanelProps {
   onStart: (config: AlgorithmConfig) => void;
   isRunning: boolean;
-  isAuthenticated: boolean;
-  presets: Preset[];
 }
 
 // ---------------------------------------------------------------------------
@@ -20,8 +18,6 @@ interface ConfigPanelProps {
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onStart,
   isRunning,
-  isAuthenticated,
-  presets,
 }) => {
   const [epsilon, setEpsilon] = useState(DEFAULT_CONFIG.epsilon);
   const [gamma, setGamma] = useState(DEFAULT_CONFIG.gamma);
@@ -29,57 +25,45 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const [episodeLimit, setEpisodeLimit] = useState(DEFAULT_CONFIG.episodeLimit);
   const [stepLimit, setStepLimit] = useState(DEFAULT_CONFIG.stepLimit);
 
+  // Reward configuration
+  const [rewardCanCollected, setRewardCanCollected] = useState(DEFAULT_REWARD_CONFIG[MoveResult.CanCollected]);
+  const [rewardHitWall, setRewardHitWall] = useState(DEFAULT_REWARD_CONFIG[MoveResult.HitWall]);
+  const [rewardCanMissing, setRewardCanMissing] = useState(DEFAULT_REWARD_CONFIG[MoveResult.CanMissing]);
+  const [rewardMoveOk, setRewardMoveOk] = useState(DEFAULT_REWARD_CONFIG[MoveResult.MoveSuccessful]);
+
   const handleStart = () => {
-    onStart({ epsilon, gamma, eta, episodeLimit, stepLimit });
+    onStart({
+      epsilon, gamma, eta, episodeLimit, stepLimit,
+      rewards: {
+        [MoveResult.CanCollected]: rewardCanCollected,
+        [MoveResult.HitWall]: rewardHitWall,
+        [MoveResult.CanMissing]: rewardCanMissing,
+        [MoveResult.MoveSuccessful]: rewardMoveOk,
+      },
+    });
   };
 
-  const applyPreset = (preset: Preset) => {
+  const applyPreset = (preset: typeof PRESETS[number]) => {
     setEpsilon(preset.config.epsilon);
     setGamma(preset.config.gamma);
     setEta(preset.config.eta);
     setEpisodeLimit(preset.config.episodeLimit);
     setStepLimit(preset.config.stepLimit);
+    setRewardCanCollected(DEFAULT_REWARD_CONFIG[MoveResult.CanCollected]);
+    setRewardHitWall(DEFAULT_REWARD_CONFIG[MoveResult.HitWall]);
+    setRewardCanMissing(DEFAULT_REWARD_CONFIG[MoveResult.CanMissing]);
+    setRewardMoveOk(DEFAULT_REWARD_CONFIG[MoveResult.MoveSuccessful]);
   };
-
-  const fallbackPresets: Preset[] =
-    presets.length > 0
-      ? presets
-      : [
-          {
-            id: 'default',
-            name: 'Default',
-            description: 'Standard Q-Learning parameters',
-            config: { ...DEFAULT_CONFIG },
-          },
-          {
-            id: 'fast-learner',
-            name: 'Fast Learner',
-            description: 'Higher learning rate, more exploration',
-            config: { epsilon: 0.3, gamma: 0.9, eta: 0.3, episodeLimit: 3000, stepLimit: 200 },
-          },
-          {
-            id: 'cautious',
-            name: 'Cautious',
-            description: 'Low exploration, high discount',
-            config: { epsilon: 0.1, gamma: 0.95, eta: 0.05, episodeLimit: 10000, stepLimit: 200 },
-          },
-          {
-            id: 'explorer',
-            name: 'Explorer',
-            description: 'High exploration rate',
-            config: { epsilon: 0.5, gamma: 0.8, eta: 0.2, episodeLimit: 5000, stepLimit: 300 },
-          },
-        ];
 
   return (
     <div style={styles.container}>
       <h3 style={styles.title}>Configuration</h3>
 
-      {/* Preset buttons - always shown */}
+      {/* Preset buttons */}
       <div style={styles.presetSection}>
         <div style={styles.presetLabel}>Presets:</div>
         <div style={styles.presetGrid}>
-          {fallbackPresets.map((preset) => (
+          {PRESETS.map((preset) => (
             <button
               key={preset.id}
               onClick={() => applyPreset(preset)}
@@ -96,10 +80,9 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* Full parameter controls - shown for authenticated users */}
-      {isAuthenticated ? (
-        <div style={styles.sliderSection}>
-          <SliderParam
+      {/* Full parameter controls */}
+      <div style={styles.sliderSection}>
+        <SliderParam
             label="Epsilon (explore rate)"
             value={epsilon}
             min={0}
@@ -146,12 +129,50 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             disabled={isRunning}
             integer
           />
-        </div>
-      ) : (
-        <div style={styles.hint}>
-          Sign in with Google to customize all parameters
-        </div>
-      )}
+
+          {/* Reward configuration */}
+          <div style={styles.rewardHeader}>Reward Values</div>
+          <SliderParam
+            label="Can Collected"
+            value={rewardCanCollected}
+            min={-20}
+            max={50}
+            step={1}
+            onChange={setRewardCanCollected}
+            disabled={isRunning}
+            integer
+          />
+          <SliderParam
+            label="Hit Wall"
+            value={rewardHitWall}
+            min={-50}
+            max={0}
+            step={1}
+            onChange={setRewardHitWall}
+            disabled={isRunning}
+            integer
+          />
+          <SliderParam
+            label="Can Missing (empty grab)"
+            value={rewardCanMissing}
+            min={-20}
+            max={0}
+            step={1}
+            onChange={setRewardCanMissing}
+            disabled={isRunning}
+            integer
+          />
+          <SliderParam
+            label="Move OK"
+            value={rewardMoveOk}
+            min={-10}
+            max={10}
+            step={1}
+            onChange={setRewardMoveOk}
+            disabled={isRunning}
+            integer
+          />
+      </div>
 
       <button
         onClick={handleStart}
@@ -264,6 +285,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sliderSection: {
     marginBottom: 12,
+  },
+  rewardHeader: {
+    color: '#888',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 6,
+    borderTop: '1px solid #333',
+    paddingTop: 8,
   },
   paramRow: {
     marginBottom: 10,

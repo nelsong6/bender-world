@@ -1,0 +1,197 @@
+/**
+ * AnimationClock drives a fractional playhead via requestAnimationFrame.
+ * floor(playhead) = current episode index.
+ * Fractional part = interpolation between episodes (for chart animation).
+ *
+ * Ported from eight-queens GenerationClock, adapted for RL episode structure.
+ */
+export class AnimationClock {
+  private rafId: number | null = null;
+  private lastTimestamp = 0;
+  private _playhead = -1;
+  private _episodesPerMs = 0.002; // speed=1 → 1/500
+  private _running = false;
+
+  // Stop-at-boundary flag: when true, clock stops after next integer crossing
+  private _stopAtBoundary = false;
+
+  // Fast-sweep state
+  private sweepMode = false;
+  private sweepTarget = 0;
+  private sweepDuration = 600;
+  private sweepStartTime = 0;
+  private sweepStartPlayhead = 0;
+  private sweepEasing: 'ease-out' | 'ease-in-out' = 'ease-out';
+
+  // Clamping: max playhead the clock is allowed to reach
+  maxPlayhead = 0;
+
+  // Speed multiplier — boundaries fire N× faster
+  speedMultiplier = 1;
+
+  // Callbacks
+  onBoundary: ((episodeIndex: number) => void) | null = null;
+  onTick: ((playhead: number, dt: number) => void) | null = null;
+  onSweepComplete: (() => void) | null = null;
+
+  get playhead(): number {
+    return this._playhead;
+  }
+
+  get running(): boolean {
+    return this._running;
+  }
+
+  /** Convert UI speed (1-500) to internal rate */
+  setSpeed(uiSpeed: number): void {
+    const delayMs = Math.max(1, 501 - uiSpeed);
+    this._episodesPerMs = 1 / delayMs;
+  }
+
+  /** Snap playhead to a specific value (for back/redo navigation) */
+  setPlayhead(value: number): void {
+    this._playhead = value;
+  }
+
+  /** Request the clock to stop after the playhead crosses the next integer boundary. */
+  stopAtNextBoundary(): void {
+    if (!this._running) return;
+    const frac = this._playhead - Math.floor(this._playhead);
+    if (frac < 1e-9) {
+      this.stop();
+      return;
+    }
+    this._stopAtBoundary = true;
+  }
+
+  /** Start the rAF loop */
+  start(): void {
+    if (this._running) return;
+    this._stopAtBoundary = false;
+    this._running = true;
+    this.lastTimestamp = 0;
+    this.rafId = requestAnimationFrame(this.tick);
+  }
+
+  /** Stop the rAF loop; playhead freezes where it is */
+  stop(): void {
+    this._running = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  /** Enter fast-sweep mode: animate playhead to target over duration */
+  startSweep(targetEpisode: number, durationMs = 600, easing: 'ease-out' | 'ease-in-out' = 'ease-out'): void {
+    this.sweepMode = true;
+    this.sweepTarget = targetEpisode;
+    this.sweepDuration = durationMs;
+    this.sweepEasing = easing;
+    this.sweepStartTime = 0;
+    this.sweepStartPlayhead = this._playhead;
+
+    if (!this._running) {
+      this._running = true;
+      this.lastTimestamp = 0;
+      this.rafId = requestAnimationFrame(this.tick);
+    }
+  }
+
+  /** Immediately complete any in-progress sweep */
+  finishSweepImmediate(): void {
+    if (!this.sweepMode) return;
+    this.sweepMode = false;
+    this._playhead = this.sweepTarget;
+    if (this.onTick) this.onTick(this._playhead, 0);
+    const cb = this.onSweepComplete;
+    this.onSweepComplete = null;
+    if (cb) cb();
+    this._running = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  /** Reset playhead and stop */
+  reset(): void {
+    this.stop();
+    this._playhead = -1;
+    this.maxPlayhead = 0;
+    this.sweepMode = false;
+    this._stopAtBoundary = false;
+    this.speedMultiplier = 1;
+  }
+
+  private tick = (timestamp: number): void => {
+    if (!this._running) return;
+
+    if (this.lastTimestamp === 0) {
+      this.lastTimestamp = timestamp;
+      if (this.sweepMode && this.sweepStartTime === 0) {
+        this.sweepStartTime = timestamp;
+      }
+      this.rafId = requestAnimationFrame(this.tick);
+      return;
+    }
+
+    const dt = timestamp - this.lastTimestamp;
+    this.lastTimestamp = timestamp;
+
+    const oldPlayhead = this._playhead;
+    let newPlayhead: number;
+
+    if (this.sweepMode) {
+      if (this.sweepStartTime === 0) this.sweepStartTime = timestamp;
+      const elapsed = timestamp - this.sweepStartTime;
+      const t = Math.min(elapsed / this.sweepDuration, 1);
+      const eased = this.sweepEasing === 'ease-in-out'
+        ? (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+        : 1 - Math.pow(1 - t, 3);
+      newPlayhead = this.sweepStartPlayhead + (this.sweepTarget - this.sweepStartPlayhead) * eased;
+
+      if (t >= 1) {
+        newPlayhead = this.sweepTarget;
+        this.sweepMode = false;
+        this._playhead = newPlayhead;
+        if (this.onTick) this.onTick(this._playhead, dt);
+        if (this.onSweepComplete) this.onSweepComplete();
+        this._running = false;
+        return;
+      }
+    } else {
+      // Normal mode: advance at constant rate, clamped to maxPlayhead
+      const advance = dt * this._episodesPerMs * this.speedMultiplier;
+      newPlayhead = Math.min(oldPlayhead + advance, this.maxPlayhead);
+    }
+
+    // Detect boundary crossings (skip during sweep — state already set)
+    if (!this.sweepMode) {
+      const oldFloor = Math.floor(oldPlayhead);
+      const newFloor = Math.floor(newPlayhead);
+      if (this.onBoundary) {
+        for (let ep = oldFloor + 1; ep <= newFloor; ep++) {
+          this.onBoundary(ep);
+        }
+      }
+      if (this._stopAtBoundary && newFloor > oldFloor) {
+        this._playhead = newFloor;
+        if (this.onTick) this.onTick(this._playhead, dt);
+        this._stopAtBoundary = false;
+        this.stop();
+        return;
+      }
+    }
+
+    this._playhead = newPlayhead;
+
+    if (this.onTick) {
+      this.onTick(this._playhead, dt);
+    }
+
+    if (this._running) {
+      this.rafId = requestAnimationFrame(this.tick);
+    }
+  };
+}

@@ -19,6 +19,7 @@ import {
   getPerceptionKeyFromPercepts,
   getPerceptionId,
 } from './perception';
+import { randomInt as prngRandomInt } from './prng';
 
 /** Represents a single square on the board. */
 interface BoardCell {
@@ -45,7 +46,11 @@ export class GameBoard {
   private currentPerceptionKey: string;
   private currentPerceptionId: number;
 
-  constructor() {
+  /** Injected PRNG for deterministic randomness. */
+  private rng: () => number;
+
+  constructor(rng: () => number) {
+    this.rng = rng;
     // Initialize 10x10 grid with empty cells
     this.board = [];
     for (let x = 0; x < 10; x++) {
@@ -73,7 +78,7 @@ export class GameBoard {
    * Copy constructor equivalent. Creates a deep copy of another GameBoard.
    */
   static clone(source: GameBoard): GameBoard {
-    const copy = new GameBoard();
+    const copy = new GameBoard(source.rng);
 
     // Deep copy cell state (walls are already set by constructor)
     for (let x = 0; x < 10; x++) {
@@ -143,7 +148,7 @@ export class GameBoard {
       for (let y = 0; y < 10; y++) {
         // C# uses MyRandom.Next(1, 101) < 50, which gives 49% chance
         // We match the same probability: random int 1..100, < 50 means 1..49 = 49 values
-        this.board[x][y].hasCan = randomInt(1, 100) < 50;
+        this.board[x][y].hasCan = prngRandomInt(this.rng, 1, 100) < 50;
       }
     }
 
@@ -159,8 +164,8 @@ export class GameBoard {
     this.board[this.benderX][this.benderY].hasBender = false;
 
     // Random new position (0-9 inclusive for both x and y)
-    this.benderX = randomInt(0, 9);
-    this.benderY = randomInt(0, 9);
+    this.benderX = prngRandomInt(this.rng, 0, 9);
+    this.benderY = prngRandomInt(this.rng, 0, 9);
 
     this.board[this.benderX][this.benderY].hasBender = true;
 
@@ -360,15 +365,3 @@ export class GameBoard {
   }
 }
 
-// ============================================================================
-// Random utility
-// ============================================================================
-
-/**
- * Generate a random integer in the range [min, max] inclusive.
- * Matches the behavior of C# MyRandom.Next(min, max+1) where the upper bound
- * in C# is exclusive.
- */
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}

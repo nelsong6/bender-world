@@ -11,6 +11,7 @@ interface StatusBarProps {
   episodeReward: number;
   totalReward: number;
   cansCollected: number;
+  cansRemaining: number;
   epsilon: number;
   algorithmConfig: AlgorithmConfig | null;
 }
@@ -25,6 +26,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   episodeReward,
   totalReward,
   cansCollected,
+  cansRemaining,
   epsilon,
   algorithmConfig,
 }) => {
@@ -59,9 +61,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       color: '#ffd700',
     },
     {
+      label: 'Cans Left',
+      value: `${cansRemaining}`,
+      color: '#ffd700',
+    },
+    {
       label: 'Epsilon',
       value: epsilon.toFixed(4),
       color: '#ff9800',
+    },
+    {
+      label: 'Gamma',
+      value: algorithmConfig ? algorithmConfig.gamma.toFixed(4) : '0.0000',
+      color: '#9c27b0',
     },
   ];
 

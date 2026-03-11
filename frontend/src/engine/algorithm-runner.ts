@@ -14,13 +14,27 @@ import {
   DEFAULT_CONFIG,
   MoveType,
   MoveResult,
-  REWARD_MAP,
+  DEFAULT_REWARD_CONFIG,
   ALL_MOVES,
   StepResult,
   EpisodeSummary,
+  RewardConfig,
 } from './types';
 import { GameBoard } from './board';
 import { QMatrix } from './q-matrix';
+import { createPrngWithState, generateSeed, type StatefulPrng } from './prng';
+
+/**
+ * Lightweight snapshot for undo/redo.
+ * Q-matrix is max 243x5 = ~10KB per snapshot.
+ */
+export interface AlgorithmSnapshot {
+  qMatrixData: Map<number, number[]>;
+  currentEpisode: number;
+  currentEpsilon: number;
+  totalReward: number;
+  prngState: number;
+}
 
 /**
  * AlgorithmRunner manages the Q-Learning algorithm execution.
@@ -34,6 +48,11 @@ export class AlgorithmRunner {
   // Configuration
   private config: AlgorithmConfig;
   private readonly initialEpsilon: number;
+  private rewardConfig: RewardConfig;
+
+  // Seeded PRNG for deterministic replay
+  private prng: StatefulPrng;
+  private readonly seed: number;
 
   // Core state
   private board: GameBoard;
@@ -56,8 +75,12 @@ export class AlgorithmRunner {
   constructor(config: AlgorithmConfig = DEFAULT_CONFIG) {
     this.config = { ...config };
     this.initialEpsilon = config.epsilon;
+    this.rewardConfig = config.rewards ?? { ...DEFAULT_REWARD_CONFIG };
 
-    this.board = new GameBoard();
+    this.seed = config.seed ?? generateSeed();
+    this.prng = createPrngWithState(this.seed);
+
+    this.board = new GameBoard(this.prng.next);
     this.qMatrix = new QMatrix();
 
     this._currentEpisode = 0;
@@ -159,6 +182,7 @@ export class AlgorithmRunner {
     const [actionIndex, wasRandom] = this.qMatrix.selectAction(
       perceptionBefore,
       this._currentEpsilon,
+      this.prng.next,
     );
     const move = ALL_MOVES[actionIndex];
 
@@ -166,7 +190,7 @@ export class AlgorithmRunner {
     const moveResult = this.board.applyMove(move);
 
     // 4. Get reward (C# ReinforcementFactors.list[result_this_step])
-    const reward = REWARD_MAP[moveResult];
+    const reward = this.rewardConfig[moveResult];
 
     // 5. Accumulate episode reward
     this._episodeReward += reward;
@@ -319,8 +343,10 @@ export class AlgorithmRunner {
   reset(config?: AlgorithmConfig): void {
     const effectiveConfig = config ?? this.config;
     Object.assign(this.config, effectiveConfig);
+    this.rewardConfig = effectiveConfig.rewards ?? { ...DEFAULT_REWARD_CONFIG };
 
-    this.board = new GameBoard();
+    this.prng = createPrngWithState(effectiveConfig.seed ?? this.seed);
+    this.board = new GameBoard(this.prng.next);
     this.qMatrix = new QMatrix();
 
     this._currentEpisode = 0;
@@ -334,6 +360,59 @@ export class AlgorithmRunner {
     this.startPerceptionId = -1;
 
     this.startNewEpisode();
+  }
+
+  // --------------------------------------------------------------------------
+  // Snapshot / Restore (for undo/redo via deterministic replay)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Create a lightweight snapshot of the current algorithm state.
+   * The board is not snapshotted — it can be reconstructed by replaying
+   * from the PRNG state.
+   */
+  getSnapshot(): AlgorithmSnapshot {
+    return {
+      qMatrixData: this.qMatrix.snapshot(),
+      currentEpisode: this._currentEpisode,
+      currentEpsilon: this._currentEpsilon,
+      totalReward: this._totalReward,
+      prngState: this.prng.getState(),
+    };
+  }
+
+  /**
+   * Restore algorithm state from a snapshot.
+   * Recreates the PRNG and board from the saved state.
+   */
+  restoreSnapshot(snapshot: AlgorithmSnapshot): void {
+    this.prng = createPrngWithState(snapshot.prngState);
+    this.board = new GameBoard(this.prng.next);
+    this.qMatrix.restore(snapshot.qMatrixData);
+    this._currentEpisode = snapshot.currentEpisode;
+    this._currentEpsilon = snapshot.currentEpsilon;
+    this._totalReward = snapshot.totalReward;
+    this._currentStep = 0;
+    this._episodeReward = 0;
+    this._cansCollected = 0;
+    this._algorithmEnded = false;
+    this.startPerceptionId = -1;
+    // Start a fresh episode from the restored state
+    this.startNewEpisode();
+  }
+
+  /**
+   * Convert an EpisodeSummary-like result from runEpisode to a summary.
+   */
+  static toSummary(episodeNumber: number, totalReward: number, cansCollected: number, stepsUsed: number, epsilonAtStart: number): EpisodeSummary {
+    return { episodeNumber, totalReward, cansCollected, stepsUsed, epsilonAtStart };
+  }
+
+  /**
+   * Get the seed used for this run.
+   */
+  getSeed(): number {
+    return this.seed;
   }
 
   // --------------------------------------------------------------------------
@@ -366,5 +445,13 @@ export class AlgorithmRunner {
 
   get algorithmConfig(): Readonly<AlgorithmConfig> {
     return this.config;
+  }
+
+  get currentRewardConfig(): Readonly<RewardConfig> {
+    return this.rewardConfig;
+  }
+
+  getCansRemaining(): number {
+    return this.board.getCansRemaining();
   }
 }

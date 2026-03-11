@@ -1,42 +1,138 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- === Bender (left side, scaled down) === -->
-  <g transform="translate(-8, 5) scale(0.7)">
+  <defs>
+    <linearGradient id="headGrad2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8eaab8"/>
+      <stop offset="30%" stop-color="#a8c0cc"/>
+      <stop offset="70%" stop-color="#9cb4c0"/>
+      <stop offset="100%" stop-color="#7a9aaa"/>
+    </linearGradient>
+    <linearGradient id="canShine2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.05)"/>
+      <stop offset="25%" stop-color="rgba(255,255,255,0.3)"/>
+      <stop offset="40%" stop-color="rgba(255,255,255,0.05)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.08)"/>
+    </linearGradient>
+    <linearGradient id="canBody2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d8d8d8"/>
+      <stop offset="30%" stop-color="#f0f0f0"/>
+      <stop offset="70%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#c8c8c8"/>
+    </linearGradient>
+    <linearGradient id="blueRibbon2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e4d8c"/>
+      <stop offset="50%" stop-color="#1a3f73"/>
+      <stop offset="100%" stop-color="#15325c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ========== BENDER (left side, scaled 0.6) ========== -->
+  <g transform="translate(-6, 8) scale(0.6)">
     <!-- Antenna -->
-    <line x1="45" y1="8" x2="45" y2="20" stroke="#666" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="45" cy="6" r="3" fill="#888"/>
+    <line x1="50" y1="2" x2="50" y2="18" stroke="#556" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="50" cy="2" r="2.8" fill="#7a8a90"/>
+
     <!-- Head -->
-    <rect x="18" y="20" width="54" height="48" rx="13" ry="13" fill="#8fa4b0"/>
-    <rect x="18" y="20" width="54" height="48" rx="13" ry="13" fill="none" stroke="#6e8794" stroke-width="2"/>
+    <path d="
+      M 20,28
+      Q 20,18 32,18
+      L 68,18
+      Q 80,18 80,28
+      L 80,68
+      Q 80,78 68,78
+      L 32,78
+      Q 20,78 20,68
+      Z
+    " fill="url(#headGrad2)" stroke="#6a8a96" stroke-width="1.8"/>
+
+    <path d="M 30,20 Q 50,17 70,20 L 70,26 Q 50,23 30,26 Z" fill="rgba(255,255,255,0.1)"/>
+
     <!-- Visor -->
-    <rect x="24" y="33" width="42" height="15" rx="7" ry="7" fill="#d4d4d4" stroke="#999" stroke-width="1.5"/>
-    <!-- Eyes -->
-    <circle cx="36" cy="40" r="5.5" fill="white" stroke="#555" stroke-width="1.5"/>
-    <circle cx="54" cy="40" r="5.5" fill="white" stroke="#555" stroke-width="1.5"/>
-    <circle cx="37" cy="40" r="2.2" fill="#222"/>
-    <circle cx="55" cy="40" r="2.2" fill="#222"/>
+    <rect x="24" y="32" width="52" height="20" rx="10" ry="10" fill="#b0b8bc" stroke="#7a8a90" stroke-width="1.5"/>
+
+    <!-- Left eye -->
+    <circle cx="38" cy="42" r="9" fill="white" stroke="#3a3a3a" stroke-width="2.2"/>
+    <circle cx="39.5" cy="41" r="3.5" fill="#111"/>
+
+    <!-- Right eye -->
+    <circle cx="62" cy="42" r="9" fill="white" stroke="#3a3a3a" stroke-width="2.2"/>
+    <circle cx="63.5" cy="41" r="3.5" fill="#111"/>
+
     <!-- Mouth -->
-    <rect x="28" y="54" width="34" height="10" rx="3" ry="3" fill="#c0c8cc" stroke="#7a8e98" stroke-width="1"/>
-    <line x1="34" y1="54" x2="34" y2="64" stroke="#7a8e98" stroke-width="1"/>
-    <line x1="40" y1="54" x2="40" y2="64" stroke="#7a8e98" stroke-width="1"/>
-    <line x1="45" y1="54" x2="45" y2="64" stroke="#7a8e98" stroke-width="1"/>
-    <line x1="50" y1="54" x2="50" y2="64" stroke="#7a8e98" stroke-width="1"/>
-    <line x1="56" y1="54" x2="56" y2="64" stroke="#7a8e98" stroke-width="1"/>
-    <!-- Body -->
-    <rect x="24" y="68" width="42" height="16" rx="4" ry="4" fill="#8fa4b0" stroke="#6e8794" stroke-width="1.5"/>
-    <!-- Arm reaching right -->
-    <rect x="60" y="72" width="28" height="6" rx="3" ry="3" fill="#8fa4b0" stroke="#6e8794" stroke-width="1"/>
+    <rect x="26" y="58" width="48" height="16" rx="2" ry="2" fill="#c8cfd4" stroke="#6a8a96" stroke-width="1.5"/>
+    <line x1="32" y1="58" x2="32" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="38" y1="58" x2="38" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="44" y1="58" x2="44" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="50" y1="58" x2="50" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="56" y1="58" x2="56" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="62" y1="58" x2="62" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="68" y1="58" x2="68" y2="74" stroke="#8a9aa0" stroke-width="1.2"/>
+    <line x1="26" y1="66" x2="74" y2="66" stroke="#8a9aa0" stroke-width="0.8"/>
+
+    <!-- Overbite -->
+    <path d="M28,74 Q50,80 72,74" fill="none" stroke="#6a8a96" stroke-width="1.5"/>
+
+    <!-- Neck -->
+    <rect x="38" y="78" width="24" height="6" fill="#7a9aaa" stroke="#6a8a96" stroke-width="1"/>
+
+    <!-- Body/shoulders -->
+    <path d="M30,84 Q50,82 70,84 L74,92 Q50,88 26,92 Z" fill="#8eaab8" stroke="#6a8a96" stroke-width="1.2"/>
+
+    <!-- Right arm reaching toward beer -->
+    <rect x="70" y="86" width="38" height="5" rx="2.5" ry="2.5" fill="#8eaab8" stroke="#6a8a96" stroke-width="1"/>
+    <!-- Hand -->
+    <rect x="104" y="84" width="6" height="9" rx="2" ry="2" fill="#8eaab8" stroke="#6a8a96" stroke-width="0.8"/>
   </g>
-  <!-- === Beer can (right side) === -->
-  <g transform="translate(14, 8) scale(0.6)">
-    <rect x="68" y="24" width="32" height="52" rx="4" ry="4" fill="#e8e8e8" stroke="#bbb" stroke-width="1.5"/>
-    <ellipse cx="84" cy="26" rx="14.5" ry="3" fill="#d0d0d0" stroke="#bbb" stroke-width="1"/>
-    <ellipse cx="84" cy="25" rx="4" ry="1.8" fill="#ccc" stroke="#aaa" stroke-width="0.8"/>
-    <rect x="70" y="34" width="28" height="30" rx="2" ry="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
-    <path d="M70,42 Q84,37 98,42 L98,50 Q84,45 70,50 Z" fill="#3a6fb0"/>
-    <rect x="70" y="51" width="28" height="2.5" fill="#c0392b"/>
-    <rect x="70" y="37" width="28" height="2.5" fill="#c0392b"/>
-    <polygon points="84,40 85.2,42.5 88,43 86,44.8 86.4,47.5 84,46 81.6,47.5 82,44.8 80,43 82.8,42.5" fill="white"/>
-    <ellipse cx="84" cy="74" rx="14.5" ry="2.5" fill="#ccc" stroke="#bbb" stroke-width="1"/>
-    <rect x="73" y="28" width="3" height="44" rx="1.5" ry="1.5" fill="rgba(255,255,255,0.25)"/>
+
+  <!-- ========== BEER CAN (right side, scaled 0.52) ========== -->
+  <g transform="translate(58, 14) scale(0.52)">
+    <!-- Can body -->
+    <rect x="22" y="6" width="56" height="84" rx="3.5" ry="3.5" fill="url(#canBody2)" stroke="#aaa" stroke-width="0.8"/>
+
+    <!-- Can top -->
+    <ellipse cx="50" cy="8" rx="27" ry="4.5" fill="#c8c8c8" stroke="#aaa" stroke-width="0.7"/>
+    <ellipse cx="50" cy="8" rx="23" ry="3.5" fill="#d4d4d4"/>
+    <ellipse cx="50" cy="7" rx="7" ry="2.2" fill="none" stroke="#999" stroke-width="1"/>
+
+    <!-- White label -->
+    <rect x="24" y="16" width="52" height="64" fill="white"/>
+
+    <!-- Top red stripe -->
+    <rect x="24" y="16" width="52" height="4" fill="#c0392b"/>
+    <rect x="24" y="20" width="52" height="1.2" fill="#d4a017"/>
+
+    <!-- Blue/red lines -->
+    <rect x="24" y="23" width="52" height="1.5" fill="#1a3f73"/>
+    <rect x="24" y="25" width="52" height="0.8" fill="#c0392b"/>
+
+    <!-- Blue ribbon -->
+    <rect x="24" y="28" width="52" height="28" fill="url(#blueRibbon2)"/>
+    <path d="M24,28 Q37,25.5 50,28 Q63,30.5 76,28" fill="url(#blueRibbon2)"/>
+    <path d="M24,56 Q37,58.5 50,56 Q63,53.5 76,56" fill="url(#blueRibbon2)"/>
+
+    <!-- Text -->
+    <text x="50" y="38" text-anchor="middle" fill="white" font-family="serif" font-size="6" font-weight="bold" letter-spacing="1.8">PABST</text>
+    <text x="50" y="45" text-anchor="middle" fill="white" font-family="serif" font-size="4.5" font-weight="bold" letter-spacing="1.2">BLUE RIBBON</text>
+
+    <!-- Star -->
+    <polygon points="50,48 51.6,51.5 55.5,52 52.8,54.5 53.3,58.5 50,56.5 46.7,58.5 47.2,54.5 44.5,52 48.4,51.5" fill="white" opacity="0.9"/>
+
+    <!-- Side accents -->
+    <path d="M25.5,44 Q30,41 30,45 Q30,49 25.5,46 Z" fill="#c0392b" opacity="0.75"/>
+    <path d="M74.5,44 Q70,41 70,45 Q70,49 74.5,46 Z" fill="#c0392b" opacity="0.75"/>
+
+    <!-- Bottom stripes -->
+    <rect x="24" y="59" width="52" height="0.8" fill="#c0392b"/>
+    <rect x="24" y="61" width="52" height="1" fill="#d4a017"/>
+    <rect x="24" y="64" width="52" height="1.5" fill="#c0392b"/>
+    <rect x="24" y="67" width="52" height="1.5" fill="#1a3f73"/>
+    <rect x="24" y="70" width="52" height="4" fill="#c0392b"/>
+    <rect x="24" y="74" width="52" height="6" fill="white"/>
+
+    <!-- Can bottom -->
+    <ellipse cx="50" cy="88" rx="27" ry="3.5" fill="#bbb" stroke="#aaa" stroke-width="0.7"/>
+
+    <!-- Shine -->
+    <rect x="22" y="6" width="56" height="84" rx="3.5" ry="3.5" fill="url(#canShine2)"/>
+    <line x1="27" y1="12" x2="27" y2="86" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
   </g>
 </svg>

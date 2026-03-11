@@ -114,3 +114,30 @@ export function getAllPerceptionKeys(): readonly string[] {
  * Total number of perception states (always 243 = 3^5).
  */
 export const TOTAL_PERCEPTION_STATES = 243;
+
+/**
+ * Decode a numeric perception state ID (0-242) back into individual percepts.
+ * Reverses the base-3 encoding: Left (outermost) → Right → Down → Up → Grab (innermost).
+ */
+export function getPerceptsById(id: number): PerceptionStateData | null {
+  if (id < 0 || id >= 243) return null;
+
+  let remaining = id;
+  const grab = PERCEPT_VALUES[remaining % 3];
+  remaining = Math.floor(remaining / 3);
+  const up = PERCEPT_VALUES[remaining % 3];
+  remaining = Math.floor(remaining / 3);
+  const down = PERCEPT_VALUES[remaining % 3];
+  remaining = Math.floor(remaining / 3);
+  const right = PERCEPT_VALUES[remaining % 3];
+  remaining = Math.floor(remaining / 3);
+  const left = PERCEPT_VALUES[remaining % 3];
+
+  return {
+    [MoveType.Left]: left,
+    [MoveType.Right]: right,
+    [MoveType.Down]: down,
+    [MoveType.Up]: up,
+    [MoveType.Grab]: grab,
+  };
+}

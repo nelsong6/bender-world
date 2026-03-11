@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { MoveType, ALL_MOVES } from './types';
+import { randomInt as prngRandomInt } from './prng';
 
 /** Number of possible actions (Left, Right, Up, Down, Grab). */
 const NUM_ACTIONS = 5;
@@ -98,7 +99,7 @@ export class QMatrix {
    *
    * @returns [actionIndex, wasRandom] tuple
    */
-  selectAction(stateId: number, epsilon: number): [number, boolean] {
+  selectAction(stateId: number, epsilon: number, rng: () => number): [number, boolean] {
     // Check if we have data for this state
     const hasData = this.data.has(stateId);
 
@@ -106,8 +107,8 @@ export class QMatrix {
       // Epsilon-greedy: random exploration check
       // C#: MyRandom.Next(1, 101) < e_current * 100
       // e.g., epsilon=0.2 -> random if randInt(1..100) < 20 -> values 1..19 = 19% chance
-      if (randomInt(1, 100) < epsilon * 100) {
-        return [randomInt(0, NUM_ACTIONS - 1), true];
+      if (prngRandomInt(rng, 1, 100) < epsilon * 100) {
+        return [prngRandomInt(rng, 0, NUM_ACTIONS - 1), true];
       }
 
       // Greedy selection with random tie-breaking
@@ -125,13 +126,13 @@ export class QMatrix {
         }
       }
 
-      const chosenIndex = bestIndices[randomInt(0, bestIndices.length - 1)];
+      const chosenIndex = bestIndices[prngRandomInt(rng, 0, bestIndices.length - 1)];
       return [chosenIndex, false];
     }
 
     // No Q-matrix entry for this state: random move
     // C#: Move.list[MyRandom.Next(0, Move.list.Count)]
-    return [randomInt(0, NUM_ACTIONS - 1), true];
+    return [prngRandomInt(rng, 0, NUM_ACTIONS - 1), true];
   }
 
   // --------------------------------------------------------------------------
@@ -274,15 +275,30 @@ export class QMatrix {
   static getMoveForIndex(index: number): MoveType {
     return ALL_MOVES[index];
   }
-}
 
-// ============================================================================
-// Random utility
-// ============================================================================
+  // --------------------------------------------------------------------------
+  // Snapshot / Restore (for undo/redo via deterministic replay)
+  // --------------------------------------------------------------------------
 
-/**
- * Generate a random integer in the range [min, max] inclusive.
- */
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  /**
+   * Create a deep copy of the Q-matrix data for snapshotting.
+   * Max 243 states x 5 values = ~10KB per snapshot.
+   */
+  snapshot(): Map<number, number[]> {
+    const copy = new Map<number, number[]>();
+    for (const [stateId, values] of this.data.entries()) {
+      copy.set(stateId, [...values]);
+    }
+    return copy;
+  }
+
+  /**
+   * Restore Q-matrix data from a snapshot.
+   */
+  restore(snapshot: Map<number, number[]>): void {
+    this.data = new Map();
+    for (const [stateId, values] of snapshot.entries()) {
+      this.data.set(stateId, [...values]);
+    }
+  }
 }

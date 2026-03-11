@@ -1,21 +1,82 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Can body -->
-  <rect x="28" y="16" width="44" height="68" rx="6" ry="6" fill="#e8e8e8" stroke="#bbb" stroke-width="1.5"/>
-  <!-- Top rim -->
-  <ellipse cx="50" cy="18" rx="20" ry="4" fill="#d0d0d0" stroke="#bbb" stroke-width="1"/>
+  <defs>
+    <linearGradient id="canShine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.05)"/>
+      <stop offset="25%" stop-color="rgba(255,255,255,0.3)"/>
+      <stop offset="40%" stop-color="rgba(255,255,255,0.05)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.08)"/>
+    </linearGradient>
+    <linearGradient id="canBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d8d8d8"/>
+      <stop offset="30%" stop-color="#f0f0f0"/>
+      <stop offset="70%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#c8c8c8"/>
+    </linearGradient>
+    <linearGradient id="blueRibbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e4d8c"/>
+      <stop offset="50%" stop-color="#1a3f73"/>
+      <stop offset="100%" stop-color="#15325c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main can body -->
+  <rect x="22" y="6" width="56" height="84" rx="3.5" ry="3.5" fill="url(#canBody)" stroke="#aaa" stroke-width="0.8"/>
+
+  <!-- Top of can -->
+  <ellipse cx="50" cy="8" rx="27" ry="4.5" fill="#c8c8c8" stroke="#aaa" stroke-width="0.7"/>
+  <ellipse cx="50" cy="8" rx="23" ry="3.5" fill="#d4d4d4"/>
+
   <!-- Pull tab -->
-  <ellipse cx="50" cy="16" rx="6" ry="2.5" fill="#ccc" stroke="#aaa" stroke-width="0.8"/>
-  <!-- Label area -->
-  <rect x="30" y="30" width="40" height="40" rx="2" ry="2" fill="white" stroke="#ddd" stroke-width="0.5"/>
-  <!-- Blue ribbon/banner -->
-  <path d="M30,42 Q50,36 70,42 L70,52 Q50,46 30,52 Z" fill="#3a6fb0"/>
-  <!-- Red accent stripes -->
-  <rect x="30" y="54" width="40" height="3" fill="#c0392b"/>
-  <rect x="30" y="36" width="40" height="3" fill="#c0392b"/>
-  <!-- Star on blue banner -->
-  <polygon points="50,40 51.5,43 55,43.5 52.5,45.8 53,49.3 50,47.5 47,49.3 47.5,45.8 45,43.5 48.5,43" fill="white"/>
-  <!-- Bottom rim -->
-  <ellipse cx="50" cy="82" rx="20" ry="3" fill="#ccc" stroke="#bbb" stroke-width="1"/>
-  <!-- Subtle can shine -->
-  <rect x="34" y="20" width="4" height="58" rx="2" ry="2" fill="rgba(255,255,255,0.25)"/>
+  <ellipse cx="50" cy="7" rx="7" ry="2.2" fill="none" stroke="#999" stroke-width="1"/>
+  <circle cx="50" cy="5.5" r="1" fill="#bbb" stroke="#999" stroke-width="0.4"/>
+
+  <!-- White label background -->
+  <rect x="24" y="16" width="52" height="64" fill="white"/>
+
+  <!-- Top red stripe -->
+  <rect x="24" y="16" width="52" height="4" fill="#c0392b"/>
+  <rect x="24" y="20" width="52" height="1.2" fill="#d4a017"/>
+
+  <!-- Thin blue-red lines -->
+  <rect x="24" y="23" width="52" height="1.5" fill="#1a3f73"/>
+  <rect x="24" y="25" width="52" height="0.8" fill="#c0392b"/>
+
+  <!-- Blue ribbon banner -->
+  <rect x="24" y="28" width="52" height="28" fill="url(#blueRibbon)"/>
+  <!-- Wavy top -->
+  <path d="M24,28 Q37,25.5 50,28 Q63,30.5 76,28" fill="url(#blueRibbon)"/>
+  <!-- Wavy bottom -->
+  <path d="M24,56 Q37,58.5 50,56 Q63,53.5 76,56" fill="url(#blueRibbon)"/>
+
+  <!-- PABST text -->
+  <text x="50" y="38" text-anchor="middle" fill="white" font-family="serif" font-size="6" font-weight="bold" letter-spacing="1.8">PABST</text>
+
+  <!-- BLUE RIBBON text -->
+  <text x="50" y="45" text-anchor="middle" fill="white" font-family="serif" font-size="4.5" font-weight="bold" letter-spacing="1.2">BLUE RIBBON</text>
+
+  <!-- Star emblem -->
+  <polygon points="50,48 51.6,51.5 55.5,52 52.8,54.5 53.3,58.5 50,56.5 46.7,58.5 47.2,54.5 44.5,52 48.4,51.5" fill="white" opacity="0.9"/>
+
+  <!-- Red side ribbon accents -->
+  <path d="M25.5,44 Q30,41 30,45 Q30,49 25.5,46 Z" fill="#c0392b" opacity="0.75"/>
+  <path d="M74.5,44 Q70,41 70,45 Q70,49 74.5,46 Z" fill="#c0392b" opacity="0.75"/>
+
+  <!-- Bottom section -->
+  <rect x="24" y="59" width="52" height="0.8" fill="#c0392b"/>
+  <rect x="24" y="61" width="52" height="1" fill="#d4a017"/>
+  <rect x="24" y="64" width="52" height="1.5" fill="#c0392b"/>
+  <rect x="24" y="67" width="52" height="1.5" fill="#1a3f73"/>
+  <rect x="24" y="70" width="52" height="4" fill="#c0392b"/>
+
+  <!-- Blank lower label area -->
+  <rect x="24" y="74" width="52" height="6" fill="white"/>
+
+  <!-- Bottom of can -->
+  <ellipse cx="50" cy="88" rx="27" ry="3.5" fill="#bbb" stroke="#aaa" stroke-width="0.7"/>
+
+  <!-- Metallic shine overlay -->
+  <rect x="22" y="6" width="56" height="84" rx="3.5" ry="3.5" fill="url(#canShine)"/>
+
+  <!-- Edge highlights -->
+  <line x1="27" y1="12" x2="27" y2="86" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
 </svg>
