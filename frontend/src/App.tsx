@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBufferedAlgorithm } from './hooks/use-buffered-algorithm';
 import { Board } from './components/Board';
 import { ConfigPanel } from './components/ConfigPanel';
@@ -26,6 +26,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('getting-started');
   const [stepIndex, setStepIndex] = useState(0);
   const [helpSection, setHelpSection] = useState<HelpSectionId>('problem');
+  const [microPlaying, setMicroPlaying] = useState(false);
+  const microIntervalRef = useRef<number | null>(null);
 
   const handleStart = useCallback(
     (config: AlgorithmConfig) => {
@@ -35,6 +37,7 @@ const App: React.FC = () => {
   );
 
   const handleReset = useCallback(() => {
+    setMicroPlaying(false);
     algorithm.reset();
     setStepIndex(0);
   }, [algorithm]);
@@ -68,6 +71,83 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [hasStarted, algorithm]);
+
+  // Stop micro play when leaving granular tab
+  useEffect(() => {
+    if (activeTab !== 'granular') {
+      setMicroPlaying(false);
+    }
+  }, [activeTab]);
+
+  // --- Granular (micro-step) callbacks ---
+
+  const handleGranularStep = useCallback(() => {
+    const history = algorithm.lastStepHistory;
+    if (!history || history.length === 0) {
+      algorithm.step();
+      return;
+    }
+    const maxIndex = history.length - 1;
+    if (stepIndex >= maxIndex) {
+      if (!algorithm.algorithmEnded) {
+        algorithm.step();
+      }
+      return;
+    }
+    setStepIndex(prev => prev + 1);
+  }, [algorithm, stepIndex]);
+
+  const handleGranularStepN = useCallback((count: number) => {
+    const history = algorithm.lastStepHistory;
+    if (!history || history.length === 0) {
+      algorithm.step();
+      return;
+    }
+    const maxIndex = history.length - 1;
+    setStepIndex(prev => Math.min(prev + count, maxIndex));
+  }, [algorithm]);
+
+  const handleGranularBack = useCallback(() => {
+    if (stepIndex > 0) {
+      setStepIndex(prev => prev - 1);
+    } else {
+      algorithm.goBack();
+    }
+  }, [stepIndex, algorithm]);
+
+  const handleGranularPlay = useCallback(() => {
+    setMicroPlaying(true);
+  }, []);
+
+  const handleGranularPause = useCallback(() => {
+    setMicroPlaying(false);
+  }, []);
+
+  // Ref to avoid stale closure in interval
+  const granularStepRef = useRef(handleGranularStep);
+  granularStepRef.current = handleGranularStep;
+
+  // Micro auto-play interval
+  useEffect(() => {
+    if (microIntervalRef.current != null) {
+      clearInterval(microIntervalRef.current);
+      microIntervalRef.current = null;
+    }
+    if (!microPlaying || algorithm.algorithmEnded) {
+      if (algorithm.algorithmEnded) setMicroPlaying(false);
+      return;
+    }
+    const delay = Math.max(1, 501 - algorithm.speed);
+    microIntervalRef.current = window.setInterval(() => {
+      granularStepRef.current();
+    }, delay);
+    return () => {
+      if (microIntervalRef.current != null) {
+        clearInterval(microIntervalRef.current);
+        microIntervalRef.current = null;
+      }
+    };
+  }, [microPlaying, algorithm.speed, algorithm.algorithmEnded]);
 
   // Reconstruct per-step QMatrix for granular tab
   const granularQMatrix = useMemo(() => {
@@ -111,26 +191,31 @@ const App: React.FC = () => {
               Bender learns to collect beer cans using Q-Learning
             </p>
           </div>
+          <img src="/sprites/fry-squinting.png" alt="" style={styles.headerFry} />
         </header>
 
         <HelpBar onOpenGlossary={handleOpenGlossary} />
 
-        {hasStarted && (
-          <Controls
-            isRunning={algorithm.running}
-            onPlay={algorithm.resume}
-            onPause={algorithm.pause}
-            onStep={algorithm.step}
-            onStepN={algorithm.stepN}
-            onBack={algorithm.goBack}
-            onReset={handleReset}
-            speed={algorithm.speed}
-            onSpeedChange={algorithm.setSpeed}
-            hasStarted={hasStarted}
-            algorithmEnded={algorithm.algorithmEnded}
-            canGoBack={algorithm.canGoBack}
-          />
-        )}
+        {hasStarted && (() => {
+          const isGranular = activeTab === 'granular';
+          return (
+            <Controls
+              isRunning={isGranular ? microPlaying : algorithm.running}
+              onPlay={isGranular ? handleGranularPlay : algorithm.resume}
+              onPause={isGranular ? handleGranularPause : algorithm.pause}
+              onStep={isGranular ? handleGranularStep : algorithm.step}
+              onStepN={isGranular ? handleGranularStepN : algorithm.stepN}
+              onBack={isGranular ? handleGranularBack : algorithm.goBack}
+              onReset={handleReset}
+              speed={algorithm.speed}
+              onSpeedChange={algorithm.setSpeed}
+              hasStarted={hasStarted}
+              algorithmEnded={algorithm.algorithmEnded}
+              canGoBack={isGranular ? (stepIndex > 0 || algorithm.canGoBack) : algorithm.canGoBack}
+              isMicro={isGranular}
+            />
+          );
+        })()}
       </div>
 
       {/* ═══════════════════════════════════════════════ */}
@@ -140,6 +225,11 @@ const App: React.FC = () => {
         {/* Left sidebar: vertical tabs */}
         <div style={styles.leftSidebar}>
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <img
+            src="/sprites/spaceship.png"
+            alt=""
+            style={styles.sidebarShip}
+          />
         </div>
 
         {/* Secondary tab strip for glossary sections */}
@@ -313,6 +403,14 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column' as const,
   },
+  headerFry: {
+    height: 64,
+    marginLeft: 'auto',
+    alignSelf: 'flex-end',
+    marginBottom: -12,
+    opacity: 0.5,
+    pointerEvents: 'none' as const,
+  },
   title: {
     margin: 0,
     fontSize: 20,
@@ -340,6 +438,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column' as const,
     backgroundColor: colors.bg.raised,
     borderRight: `1px solid ${colors.border.subtle}`,
+  },
+  sidebarShip: {
+    marginTop: 'auto',
+    padding: 8,
+    opacity: 0.4,
+    pointerEvents: 'none' as const,
   },
   tabContent: {
     display: 'flex',

@@ -19,7 +19,7 @@ This is an **educational visualization tool**, not a production RL system. Every
 The primary experience (99% of users) is **Granular Step mode** — watching Bender move around the grid one step at a time. The app should funnel users toward this as quickly as possible:
 
 1. **Getting Started tab** → user reads the brief intro, clicks **"Explore with Granular Step →"**
-2. **Granular Step tab** → user clicks **Step (→)** to advance one episode at a time, then uses the step slider / arrow buttons in StepWalkthrough to watch Bender move cell by cell
+2. **Granular Step tab** → user clicks **Step (→)** to advance one micro-step at a time (the Controls bar automatically switches to step-level granularity on this tab), watching Bender move cell by cell
 3. Along the way, the user sees the **PerceptionDisplay** update (what Bender sees), the **QMatrixInspector** update (what Bender is learning), and the **Board** animate (where Bender goes)
 
 The "Full Step" tab and high-speed playback exist for power users who want to watch convergence over thousands of episodes, but the core appeal is the step-by-step micro view where you can see the algorithm thinking. Design decisions should prioritize making this granular flow feel responsive, intuitive, and visually clear.
@@ -313,7 +313,7 @@ The main layout follows the eight-queens sidebar+content pattern:
 **Sticky top section** (`flexShrink: 0`, `zIndex: 160`):
 - Header with title + subtitle
 - HelpBar (always visible)
-- Controls bar (only when `hasStarted` — i.e., after config is submitted)
+- Controls bar (only when `hasStarted` — i.e., after config is submitted). Callbacks are tab-aware: on the Granular Step tab, Controls receives micro-step callbacks (`handleGranularStep`, etc.) instead of episode-level callbacks. A `microPlaying` state + `setInterval` drives auto-play at the step level.
 
 **Main section** (`flex: 1`, `flexDirection: row`, `minHeight: 0`):
 - Left sidebar: vertical `TabBar`
@@ -414,17 +414,31 @@ Renders glossary content for the selected section. Used with a secondary sidebar
 
 Flat horizontal bar in the sticky top section (only visible after training starts).
 
-**Buttons:**
+**Tab-aware granularity:** Controls automatically switch between episode-level and micro-step-level behavior based on the active tab. On the Granular Step tab, all buttons operate on individual steps within an episode. On all other tabs, they operate on full episodes. This is achieved by App.tsx passing different callback functions — Controls itself is mostly tab-unaware, receiving only an `isMicro` prop for label changes.
+
+**Buttons (episode mode — Full Step tab and others):**
 | Button | Shortcut | Action | Color |
 |--------|----------|--------|-------|
-| Play/Pause | Space | Toggle playback | Green |
+| Play/Pause | Space | Toggle episode playback | Green |
 | Back | Left arrow | Undo last episode | Purple |
 | Step | Right arrow | Advance 1 episode | Blue |
 | +10 | Shift+Right | Advance 10 episodes | Blue |
 | +100 | — | Advance 100 episodes | Dark blue |
 | Reset | — | Return to config screen | Red |
 
-**Speed slider:** Logarithmic scale from 1 to 500 episodes/second. Display shows current speed in "ep/s".
+**Buttons (micro-step mode — Granular Step tab):**
+
+| Button | Shortcut | Action |
+|--------|----------|--------|
+| Play/Pause | Space | Toggle micro-step auto-play (setInterval-driven) |
+| Back | Left arrow | Go back 1 step; if at step 0, undo episode |
+| Step | Right arrow | Advance 1 step; if at end of episode, advance to next episode |
+| +10 | Shift+Right | Advance 10 steps (clamped to episode end) |
+| +100 | — | Advance 100 steps (clamped to episode end) |
+
+**Speed slider:** Logarithmic scale from 1 to 500. Display shows "ep/s" in episode mode, "steps/s" in micro-step mode.
+
+**Props:** `isMicro?: boolean` — when true, speed label shows "steps/s" and help text reflects micro-step mode.
 
 **Keyboard shortcuts** (registered via `useEffect` + `keydown` listener):
 - Space: Play/Pause (only when algorithm is active and not ended)
@@ -650,13 +664,13 @@ When the user clicks Step or Step-N, the clock enters sweep mode: it animates th
 
 ## Keyboard Shortcuts
 
-| Key | Action | Context |
-|-----|--------|---------|
-| Space | Play / Pause | Only when algorithm started and not ended |
-| → | Step one episode | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
-| Shift+→ | Step 10 episodes | Only when paused |
-| ← | Back (undo) | Only when paused and undo available |
-| S | Pin/unpin help text | Always (except when typing in inputs) |
+| Key | Action (Full Step tab) | Action (Granular Step tab) | Context |
+| ----- | ------------------------ | --------------------------- | --------- |
+| Space | Play / Pause episodes | Play / Pause micro-steps | Only when algorithm started and not ended |
+| → | Step one episode | Step one micro-step (next episode at end) | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
+| Shift+→ | Step 10 episodes | Step 10 micro-steps (clamped) | Only when paused |
+| ← | Back (undo episode) | Back one micro-step (undo episode at step 0) | Only when paused and undo/step available |
+| S | Pin/unpin help text | Pin/unpin help text | Always (except when typing in inputs) |
 
 ## Sprites (`frontend/public/sprites/`)
 
@@ -813,3 +827,4 @@ Reverse-chronological record of significant changes, decisions, and context that
 - Added pre-start → (right arrow) shortcut: pressing → before training starts auto-starts with `DEFAULT_CONFIG`, switches to Granular Step tab, enables step capture, and steps one episode. Implemented as a `useEffect` in App.tsx that only runs when `!hasStarted` — no conflict with Controls.tsx's keyboard handler which only mounts after start. Explicitly calls `setCaptureSteps(true)` before `step()` because the tab-switching `useEffect` won't fire until the next render.
 - Fixed visited cell (teal border) highlights not updating when stepping backward in Granular Step tab. Board's internal `visitedRef` Set only grew — never shrank on backward navigation. Added optional `visitedCells?: Set<string>` prop to Board. App.tsx computes the set from `lastStepHistory[0..stepIndex]` positions so stepping backward correctly removes teal highlights from cells Bender hasn't visited yet at that step. Internal `visitedRef` tracking is skipped when the prop is provided. Full Step tab and Getting Started tab are unaffected (no prop passed, use internal tracking).
 - Fixed subtle vertical layout shift in Granular Step tab when stepping the first episode. The StepWalkthrough slider row changed height between placeholder text ("Click > to step the first episode") and the actual `<input type="range">` — placeholder could wrap at narrow widths, and bold vs normal-weight values in detail rows had slightly different line heights. Fixed by adding explicit `height: 28` on the slider row and `height: 22` on each detail row, plus `whiteSpace: nowrap` on the placeholder text. This eliminates the ~2px shift that caused QMatrixInspector to jump up.
+- Made Controls bar (Play/Back/Step/+10/+100) operate at micro-step granularity when the Granular Step tab is active. Previously all controls always advanced full episodes, forcing users to use the small `< >` buttons in StepWalkthrough. Now App.tsx wraps the Controls callbacks based on `activeTab === 'granular'`: Step advances one micro-step within the episode (advancing to next episode at end), Back goes back one step (undoing the episode at step 0), +10/+100 jump N steps clamped to episode end. Play uses a `setInterval`-based auto-advance loop (`microPlaying` state + `microIntervalRef`) instead of the AnimationClock pipeline. Speed slider label dynamically shows "steps/s" vs "ep/s". Controls.tsx gained a minimal `isMicro` prop for the label; all behavioral logic lives in App.tsx. Safety effects stop micro-play on tab switch, reset, and algorithm end.

@@ -18,6 +18,7 @@ interface ControlsProps {
   hasStarted: boolean;
   algorithmEnded: boolean;
   canGoBack: boolean;
+  isMicro?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,7 @@ export const Controls: React.FC<ControlsProps> = ({
   hasStarted,
   algorithmEnded,
   canGoBack,
+  isMicro = false,
 }) => {
   const canPlay = hasStarted && !algorithmEnded;
   const canStep = hasStarted && !isRunning && !algorithmEnded;
@@ -88,7 +90,7 @@ export const Controls: React.FC<ControlsProps> = ({
   }, [handleKeyDown]);
 
   return (
-    <div style={styles.bar} data-help="Space=play/pause, Right=step, Shift+Right=step 10, Left=back">
+    <div style={styles.bar} data-help={isMicro ? "Space=play/pause, Right=step, Shift+Right=+10 steps, Left=back (micro-step mode)" : "Space=play/pause, Right=step, Shift+Right=step 10, Left=back"}>
       {/* Buttons */}
       <button
         onClick={isRunning ? onPause : onPlay}
@@ -147,7 +149,7 @@ export const Controls: React.FC<ControlsProps> = ({
 
       {/* Speed */}
       <span style={styles.speedLabel}>
-        Speed: <span style={styles.speedValue}>{speed} ep/s</span>
+        Speed: <span style={styles.speedValue}>{speed} {isMicro ? 'steps/s' : 'ep/s'}</span>
       </span>
       <span style={styles.speedMark}>1</span>
       <input
@@ -157,7 +159,7 @@ export const Controls: React.FC<ControlsProps> = ({
         value={speedToSlider(speed)}
         onChange={(e) => onSpeedChange(sliderToSpeed(parseInt(e.target.value)))}
         style={styles.slider}
-        data-help="Logarithmic speed: 1–500 episodes per second"
+        data-help={isMicro ? "Logarithmic speed: 1–500 steps per second" : "Logarithmic speed: 1–500 episodes per second"}
       />
       <span style={styles.speedMark}>500</span>
 
