@@ -202,7 +202,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
   },
   stepNBtn: {
-    backgroundColor: '#4a88c0',
+    backgroundColor: colors.accent.blue,
+    opacity: 0.8,
     color: '#fff',
   },
   resetBtn: {
@@ -246,7 +247,7 @@ const styles: Record<string, React.CSSProperties> = {
   endedBadge: {
     marginLeft: 8,
     padding: '3px 8px',
-    backgroundColor: '#2e7d32',
+    backgroundColor: colors.accent.green,
     color: '#fff',
     borderRadius: 3,
     fontFamily: 'monospace',

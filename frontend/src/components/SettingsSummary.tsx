@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AlgorithmConfig } from '../engine/types';
 import { MoveResult, DEFAULT_REWARD_CONFIG } from '../engine/types';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -33,22 +34,22 @@ export const SettingsSummary: React.FC<SettingsSummaryProps> = ({
     {
       label: 'Can Collected',
       value: `${rewards[MoveResult.CanCollected] >= 0 ? '+' : ''}${rewards[MoveResult.CanCollected]}`,
-      color: '#4caf50',
+      color: colors.accent.green,
     },
     {
       label: 'Hit Wall',
       value: `${rewards[MoveResult.HitWall] >= 0 ? '+' : ''}${rewards[MoveResult.HitWall]}`,
-      color: '#f44336',
+      color: colors.accent.red,
     },
     {
       label: 'Can Missing',
       value: `${rewards[MoveResult.CanMissing] >= 0 ? '+' : ''}${rewards[MoveResult.CanMissing]}`,
-      color: '#ff9800',
+      color: colors.accent.orange,
     },
     {
       label: 'Move OK',
       value: `${rewards[MoveResult.MoveSuccessful] >= 0 ? '+' : ''}${rewards[MoveResult.MoveSuccessful]}`,
-      color: '#888',
+      color: colors.text.tertiary,
     },
   ];
 
@@ -82,14 +83,14 @@ export const SettingsSummary: React.FC<SettingsSummaryProps> = ({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bg.raised,
     borderRadius: 8,
     padding: 12,
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   title: {
     margin: '0 0 8px 0',
-    color: '#e0e0e0',
+    color: colors.text.primary,
     fontSize: 14,
     fontFamily: 'monospace',
   },
@@ -104,25 +105,25 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '2px 0',
   },
   label: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
   },
   value: {
-    color: '#e0e0e0',
+    color: colors.text.primary,
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: 'bold',
   },
   rewardHeader: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 8,
     marginBottom: 4,
-    borderTop: '1px solid #333',
+    borderTop: `1px solid ${colors.border.subtle}`,
     paddingTop: 6,
   },
 };

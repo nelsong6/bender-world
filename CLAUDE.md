@@ -91,7 +91,7 @@ Reward values are configurable via the Config panel sliders.
 
 ### Algorithm Termination
 
-The algorithm ends when `currentStep >= stepLimit AND currentEpisode >= episodeLimit`. Each episode runs up to `stepLimit` steps, then the board is reshuffled for the next episode.
+The algorithm ends when `currentStep >= stepLimit AND currentEpisode >= episodeLimit`. Each episode runs up to `stepLimit` steps, then the board is reshuffled for the next episode. The complete sequence of all episodes is called a **run**.
 
 ## Engine Layer (`frontend/src/engine/`)
 
@@ -300,8 +300,8 @@ The main layout follows the eight-queens sidebar+content pattern:
 │     │  getting-started: GettingStartedTab       │  flex: 1
 │ (v  │  config: ConfigPanel + SettingsSummary    │  minHeight: 0
 │  e  │  full: Board+StatusBar | EpisodeChart     │  overflowY: auto
-│  r  │  granular: Board | StepWalkthrough |      │
-│  t  │           Perception + QMatrix            │
+│  r  │  granular: Board | [StepWalk+Perception]   │
+│  t  │                    QMatrix                │
 │  i  │  glossary: [section picker] + content     │
 │  c  │                                           │
 │  a  │                                           │
@@ -331,7 +331,7 @@ The main layout follows the eight-queens sidebar+content pattern:
 | `getting-started` | Getting Started | Welcome, quick-start buttons, how-it-works terms |
 | `config` | Config | Preset buttons, parameter sliders, settings summary |
 | `full` | Full Step | Board + StatusBar alongside EpisodeChart (2 columns) |
-| `granular` | Granular Step | Board alongside StepWalkthrough + PerceptionDisplay + QMatrixInspector |
+| `granular` | Granular Step | StepWalkthrough + Board (left col) alongside PerceptionDisplay + QMatrixInspector (right col) |
 | `glossary` | Help / Glossary | Secondary section picker sidebar + glossary content |
 
 **Styling pattern (shared with eight-queens):**
@@ -349,11 +349,11 @@ Two-column layout (text left, board preview right):
 1. **CTA box** — "Watch Bender Learn →" + "Full Run (advanced) →"
 2. **Title + intro**
 3. **Using the Help Bar** — hover for help, press S to pin/unpin, glossary links
-4. **How It Works** — brief glossary terms: Grid, Beer Can, Wall, Episode, Q-Value, Epsilon
+4. **How It Works** — brief glossary terms: Grid, Beer Can, Wall, Episode, Run, Q-Value, Epsilon
 5. **Reference** — link to "Browse Help & Glossary →"
 
 **Right column:**
-- Static `<Board boardState={null} />` (renders empty grid)
+- Pre-populated `<Board boardState={PREVIEW_BOARD} />` (static board with cans and Bender, fixed seed 42)
 - Caption: "Bender's 10×10 Grid"
 - Hint text about perception and Q-matrix size
 
@@ -381,7 +381,7 @@ Renders glossary content for the selected section. Used with a secondary sidebar
 | ID | Label | Content |
 |----|-------|---------|
 | `problem` | The Problem | Grid, beer cans, walls, episodes, steps |
-| `algorithm` | Q-Learning | Q-values, epsilon, gamma, eta, rewards, convergence |
+| `algorithm` | Q-Learning | Q-values, epsilon, gamma, eta, rewards, convergence, run |
 | `qmatrix` | Q-Matrix | States (perceptions), actions, greedy vs random |
 | `perception` | Perception | 5 sensors, sensor values, perception keys, base-3 encoding |
 | `controls` | Controls | Playback shortcuts, tab descriptions, hold help |
@@ -409,8 +409,6 @@ Renders glossary content for the selected section. Used with a secondary sidebar
 - Move OK: −10 to +10
 
 **Start Training button:** Calls `onStart(config)` with current slider values. Disabled while running.
-
-**Note:** This component still uses legacy inline hex colors (e.g., `'#1e1e2e'`, `'#888'`) instead of the centralized `colors.ts` palette. Future cleanup should migrate these.
 
 ### Controls.tsx — Playback Control Bar
 
@@ -458,9 +456,9 @@ Renders the game board using HTML5 Canvas with sprite overlays.
 
 **Responsive sizing:** `ResizeObserver` watches container width (max 600px canvas). HiDPI support via `devicePixelRatio` scaling (canvas internal resolution vs CSS display size).
 
-**Visited tracking:** Board tracks which cells Bender has visited (explored border color vs unexplored).
+**Visited tracking:** Board tracks which cells Bender has visited (explored border color vs unexplored). By default, an internal `visitedRef` Set accumulates positions on each render. In Granular Step mode, an optional `visitedCells?: Set<string>` prop overrides this — App.tsx computes the set from `lastStepHistory[0..stepIndex]` so stepping backward correctly removes teal highlights from cells not yet visited.
 
-**Null state:** When `boardState={null}`, renders empty grid (used in Getting Started tab preview).
+**No null callers:** All Board render sites pass a valid `BoardState` (Getting Started uses a static preview board, other tabs use algorithm state).
 
 ### StatusBar.tsx — Real-time Statistics Display
 
@@ -525,7 +523,7 @@ Two-part Q-value explorer:
 - Auto-syncs to current perception when algorithm runs
 
 **Detail row (middle):**
-- Shows 5 action Q-values for the selected state
+- Always renders 5 action boxes when a state is selected (shows `0.000` in disabled color if the state has no Q-values yet)
 - Highlights best action (boldface, light green background)
 - Color-codes values: green (positive), red (negative), gray (zero)
 
@@ -554,7 +552,7 @@ Used in the Granular Step tab. Shows individual step details within an episode.
 - Step navigation: slider + left/right buttons
 - Step counter: "step X / Y"
 
-**Step details panel (when step data available):**
+**Step details panel (always rendered for stable height):**
 - Position (1-indexed grid coordinates)
 - Move (Left/Right/Down/Up/Grab)
 - Strategy (Random vs Greedy, color-coded)
@@ -564,34 +562,36 @@ Used in the Granular Step tab. Shows individual step details within an episode.
 - Cans Collected
 - Perception key string
 
-**Behavior:** When stepping past the end of an episode, clicking ">" triggers `onNextEpisode` (advances to the next episode). When no step data exists, shows "Click > to step the first episode".
+When no step data exists, all values show "—" in `colors.text.disabled` to maintain consistent layout height.
+
+**Behavior:** When stepping past the end of an episode, clicking ">" triggers `onNextEpisode` (advances to the next episode).
 
 ## Color Palette (`frontend/src/colors.ts`)
 
-Centralized color constants used throughout the app. All components should import from here (some legacy components still have inline hex — to be migrated).
+Futurama-themed palette: oxidized steel backgrounds, acidic lime-green learning signals, warm beer-amber for cans, electric accents. All components import from `colors.ts` — no raw hex in components (except `#fff` for button text).
 
 ```
-bg.base      = #0d0d1a   (deepest background)
-bg.raised    = #14142b   (panels, bars, headers)
-bg.surface   = #1c1c3a   (input fields, cards, section bodies)
-bg.overlay   = #252550   (hover states, kbd backgrounds)
+bg.base      = #0a0f14   (deep gunmetal steel)
+bg.raised    = #141f2a   (oxidized steel panel)
+bg.surface   = #1a2a38   (brushed steel surface)
+bg.overlay   = #223d4e   (elevated panel zone)
 
-border.subtle = #2a2a4e
-border.strong = #3a3a5e
+border.subtle = #2a3f52   (faint rust line)
+border.strong = #3d5666   (corroded metal edge)
 
-text.primary   = #e2e2ef  (headings, active labels)
-text.secondary = #a0a0be  (body text, descriptions)
-text.tertiary  = #6e6e8a  (hints, inactive tabs)
-text.disabled  = #4a4a64
+text.primary   = #d4e4f0  (bright steel-blue-white)
+text.secondary = #96aac0  (duller steel gray)
+text.tertiary  = #6a7c8a  (dim metal)
+text.disabled  = #4a5566  (very dark steel)
 
-accent.green      = #4caf50   (play button, positive values, reward line)
-accent.greenLight = #66bb6a
-accent.gold       = #ffd700   (cans, held badge)
-accent.blue       = #6bb8f0   (step buttons, greedy strategy)
-accent.orange     = #ff9800   (moving average, random strategy, epsilon)
-accent.red        = #f44336   (walls, negative values, reset)
-accent.teal       = #30c8b0
-accent.purple     = #7c6cf0   (primary CTA, glossary links, back button, tab accents)
+accent.green      = #5fd64d   (acidic lime — play button, positive values, reward line)
+accent.greenLight = #7aed66   (brighter lime)
+accent.gold       = #f5c842   (warm beer-amber — cans, held badge)
+accent.blue       = #4da6ff   (sharp electric blue — step buttons, greedy strategy)
+accent.orange     = #ff8c3d   (warm orange — moving average, random strategy, epsilon)
+accent.red        = #ff5555   (neon red — walls, negative values, reset)
+accent.teal       = #2fbfc9   (acidic teal — explored cells)
+accent.purple     = #b876ff   (electric purple — primary CTA, glossary links, back button)
 ```
 
 Additional domain-specific palettes: `board.*`, `chart.*`, `perception.*`, `qValue.*`, `interactive.*`.
@@ -653,7 +653,7 @@ When the user clicks Step or Step-N, the clock enters sweep mode: it animates th
 | Key | Action | Context |
 |-----|--------|---------|
 | Space | Play / Pause | Only when algorithm started and not ended |
-| → | Step one episode | Only when paused |
+| → | Step one episode | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
 | Shift+→ | Step 10 episodes | Only when paused |
 | ← | Back (undo) | Only when paused and undo available |
 | S | Pin/unpin help text | Always (except when typing in inputs) |
@@ -792,8 +792,24 @@ Reverse-chronological record of significant changes, decisions, and context that
 - Restructured App.tsx to match eight-queens sidebar+content layout. Previous attempt (~50 conversations worth of incremental changes) had partially updated TabBar/Controls/StepWalkthrough/HelpBar/HelpGlossary to use new tab IDs and vertical sidebar styling, but left App.tsx on old tab IDs (`overview`/`inspect`/`walkthrough`) and old two-column layout — app was completely broken because TabBar exported new IDs that App.tsx didn't reference.
 - Created GettingStartedTab.tsx adapted from eight-queens: two-column layout with welcome text, help bar guide, quick-start buttons, how-it-works terms, and a static board preview. Quick-start buttons auto-start with DEFAULT_CONFIG and navigate to the correct tab.
 - Wired HelpBar and HelpGlossary into App.tsx. Glossary tab gets a secondary vertical sidebar (opTabStrip pattern) for section picking.
-- Full Step tab: Board+StatusBar | EpisodeChart (2-column flex). Granular Step tab: Board | StepWalkthrough+PerceptionDisplay+QMatrixInspector (2-column, right side scrolls).
+- Full Step tab: Board+StatusBar | EpisodeChart (2-column flex). Granular Step tab: StepWalkthrough+Board (left col) | PerceptionDisplay+QMatrixInspector (right col, scrolls).
 - Fixed StepWalkthrough props (was passing `stepHistory={null}` and missing `onNextEpisode`/`onPrevEpisode`/`canGoBack`/`algorithmEnded`).
 - Rewrote CLAUDE.md with comprehensive documentation of every feature, component, engine module, and pattern.
 - Added this Change Log section — going forward, every session should append a dated entry summarizing what changed, why, what was tried/rejected, and any open threads.
 - Fixed board "slow expand" on tab switch to Granular Step. The `granularLeftCol` used `flex: '0 0 auto'`, letting flexbox negotiate width over multiple frames — Board's ResizeObserver fired on each intermediate size, causing the canvas to visually grow. Fixed by locking the column to `flex: '0 0 600px'` and adding `maxWidth: 600` to Board's container style.
+- Fixed page-level scrollbar on Granular Step tab. The browser's default `body { margin: 8px }` pushed the `100vh` app container beyond the viewport. Added `body { margin: 0; }` reset in `index.html`.
+- Fixed Board and PerceptionDisplay not updating when stepping through an episode in Granular Step tab. Board and PerceptionDisplay were always receiving end-of-episode state (`algorithm.boardState`/`algorithm.currentPerceptionId`). Now derives per-step state from `lastStepHistory[stepIndex].boardSnapshot` when available, so Bender visually moves on the grid as the user clicks ">" in StepWalkthrough.
+- Fixed QMatrixInspector not updating per-step in Granular Step tab (same pattern as Board/PerceptionDisplay bug above). Added `qMatrixSnapshot: Map<number, number[]>` to `WalkthroughStep` in episode-buffer.ts, captured per step in `computeEpisodeWithSteps`. App.tsx now reconstructs a per-step QMatrix via `useMemo` and passes it to QMatrixInspector along with the per-step perception key. ~10KB per snapshot × 200 steps = ~2MB per episode, acceptable since only one episode's history is kept.
+
+### 2026-03-12
+- Moved StepWalkthrough from the left column to the right column in the Granular Step tab. StepWalkthrough and PerceptionDisplay now sit side-by-side in a 50/50 flex row at the top of the right column, with QMatrixInspector below. Board is now the sole occupant of the left column. Added `granularTopRow` and `granularTopRowHalf` styles to App.tsx.
+- Replaced the generic Material Design color palette with a Futurama-themed palette in `colors.ts`. Backgrounds shifted from dark indigo to oxidized gunmetal steel (`#0a0f14`–`#223d4e`). Accents changed to acidic lime green (`#5fd64d`), warm beer-amber (`#f5c842`), electric blue/purple, neon red — industrial feel matching Bender's universe. Board tiles shifted from light gray with colored borders to metallic silver with teal (explored) and lime (current) borders.
+- Migrated all 7 legacy components from hardcoded hex colors to `colors.ts` tokens: QMatrixInspector (38 values), Board (13), PerceptionDisplay (11), ConfigPanel (11), StatusBar (11), SettingsSummary (9), Controls (2). Only `#fff` (white button text) remains as inline hex across the codebase. Removed local `PERCEPT_COLORS` / `TILE` / `COLORS` redefinitions in favor of `colors.perception.*` and `colors.board.*`.
+- Fixed jarring size jump in StepWalkthrough between empty and populated states. Detail rows (Position, Move, Strategy, etc.) are now always rendered — showing "—" placeholders in `colors.text.disabled` when no step data exists, so the component maintains stable height before and after the first step.
+- Fixed jarring size jump in QMatrixInspector detail row between states with and without Q-values. Previously showed a small italic "State X has no Q-values yet" text vs 5 action boxes — now always renders the 5 action boxes, showing `0.000` in disabled color when the state has no Q-values yet.
+- Fixed QMatrixInspector detail boxes and percept dropdowns shifting width based on content (e.g., "-0.500" wider than "0.000"). Changed `flex: '1 1 auto'` → `flex: '1 1 0'` on both `detailItem` and `perceptDropdownGroup` styles so all boxes share equal width regardless of value.
+- Pre-populated the Board on the Getting Started tab. Instead of `boardState={null}` (empty gray grid + placeholder text), GettingStartedTab now creates a static `PREVIEW_BOARD` via a module-level IIFE: `GameBoard` with fixed seed 42, shuffled cans and Bender. Removed the dead placeholder overlay and style from Board.tsx.
+- Adopted **"run"** as the formal term for the complete sequence of all episodes in a training session. Added "Run" glossary term to HelpGlossary (algorithm section) and GettingStartedTab (How It Works terms). Documented in CLAUDE.md Algorithm Termination section. (Eight-queens already had "epoch" for the equivalent concept.)
+- Added pre-start → (right arrow) shortcut: pressing → before training starts auto-starts with `DEFAULT_CONFIG`, switches to Granular Step tab, enables step capture, and steps one episode. Implemented as a `useEffect` in App.tsx that only runs when `!hasStarted` — no conflict with Controls.tsx's keyboard handler which only mounts after start. Explicitly calls `setCaptureSteps(true)` before `step()` because the tab-switching `useEffect` won't fire until the next render.
+- Fixed visited cell (teal border) highlights not updating when stepping backward in Granular Step tab. Board's internal `visitedRef` Set only grew — never shrank on backward navigation. Added optional `visitedCells?: Set<string>` prop to Board. App.tsx computes the set from `lastStepHistory[0..stepIndex]` positions so stepping backward correctly removes teal highlights from cells Bender hasn't visited yet at that step. Internal `visitedRef` tracking is skipped when the prop is provided. Full Step tab and Getting Started tab are unaffected (no prop passed, use internal tracking).
+- Fixed subtle vertical layout shift in Granular Step tab when stepping the first episode. The StepWalkthrough slider row changed height between placeholder text ("Click > to step the first episode") and the actual `<input type="range">` — placeholder could wrap at narrow widths, and bold vs normal-weight values in detail rows had slightly different line heights. Fixed by adding explicit `height: 28` on the slider row and `height: 22` on each detail row, plus `whiteSpace: nowrap` on the placeholder text. This eliminates the ~2px shift that caused QMatrixInspector to jump up.

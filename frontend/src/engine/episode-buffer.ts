@@ -8,6 +8,7 @@ export interface WalkthroughStep {
     benderPosition: [number, number];
     perceptionKey: string;
   };
+  qMatrixSnapshot: Map<number, number[]>;
 }
 
 export interface EpisodeBufferEntry {
@@ -219,9 +220,10 @@ export class EpisodeBuffer {
         break;
       }
 
-      // Capture board state after this step
+      // Capture board state and Q-matrix after this step
       const boardSnapshot = this.runner.getCurrentState();
-      steps.push({ step, boardSnapshot });
+      const qMatrixSnapshot = this.runner.getQMatrix().snapshot();
+      steps.push({ step, boardSnapshot, qMatrixSnapshot });
       lastStep = step;
     }
 

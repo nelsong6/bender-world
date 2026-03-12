@@ -134,57 +134,63 @@ export const StepWalkthrough: React.FC<StepWalkthroughProps> = ({
         </button>
       </div>
 
-      {/* Step details */}
-      {step ? (
-        <div style={styles.details}>
-          <div style={styles.row}>
-            <span style={styles.label}>Position</span>
-            <span style={styles.value}>({step.benderPosition[0] + 1}, {step.benderPosition[1] + 1})</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Move</span>
-            <span style={styles.value}>{step.move}</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Strategy</span>
-            <span style={{
-              ...styles.value,
-              color: step.wasRandomMove ? colors.accent.orange : colors.accent.blue,
-            }}>
-              {step.wasRandomMove ? 'Random' : 'Greedy'}
-            </span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Result</span>
-            <span style={{ ...styles.value, color: RESULT_COLORS[step.moveResult] || colors.text.primary }}>
-              {step.moveResult}
-            </span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Reward</span>
-            <span style={{
-              ...styles.value,
-              color: step.reward > 0 ? colors.accent.green : step.reward < 0 ? colors.accent.red : colors.text.tertiary,
-            }}>
-              {step.reward > 0 ? '+' : ''}{step.reward}
-            </span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Episode Reward</span>
-            <span style={styles.value}>{step.episodeReward}</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Cans Collected</span>
-            <span style={styles.value}>{step.cansCollected}</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Perception</span>
-            <span style={{ ...styles.value, fontSize: 10 }}>{step.perception}</span>
-          </div>
+      {/* Step details — always rendered for stable height */}
+      <div style={styles.details}>
+        <div style={styles.row}>
+          <span style={styles.label}>Position</span>
+          <span style={step ? styles.value : styles.placeholder}>
+            {step ? `(${step.benderPosition[0] + 1}, ${step.benderPosition[1] + 1})` : '—'}
+          </span>
         </div>
-      ) : (
-        <div style={styles.empty}>No steps yet</div>
-      )}
+        <div style={styles.row}>
+          <span style={styles.label}>Move</span>
+          <span style={step ? styles.value : styles.placeholder}>
+            {step ? step.move : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Strategy</span>
+          <span style={step ? {
+            ...styles.value,
+            color: step.wasRandomMove ? colors.accent.orange : colors.accent.blue,
+          } : styles.placeholder}>
+            {step ? (step.wasRandomMove ? 'Random' : 'Greedy') : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Result</span>
+          <span style={step ? { ...styles.value, color: RESULT_COLORS[step.moveResult] || colors.text.primary } : styles.placeholder}>
+            {step ? step.moveResult : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Reward</span>
+          <span style={step ? {
+            ...styles.value,
+            color: step.reward > 0 ? colors.accent.green : step.reward < 0 ? colors.accent.red : colors.text.tertiary,
+          } : styles.placeholder}>
+            {step ? `${step.reward > 0 ? '+' : ''}${step.reward}` : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Episode Reward</span>
+          <span style={step ? styles.value : styles.placeholder}>
+            {step ? step.episodeReward : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Cans Collected</span>
+          <span style={step ? styles.value : styles.placeholder}>
+            {step ? step.cansCollected : '—'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Perception</span>
+          <span style={step ? { ...styles.value, fontSize: 10 } : styles.placeholder}>
+            {step ? step.perception : '—'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -236,19 +242,17 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.4,
     cursor: 'not-allowed',
   },
-  empty: {
-    color: colors.text.tertiary,
+  placeholder: {
+    color: colors.text.disabled,
     fontSize: 12,
     fontFamily: 'monospace',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    padding: 16,
   },
   sliderRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     marginBottom: 10,
+    height: 28,
   },
   sliderPlaceholder: {
     flex: 1,
@@ -257,6 +261,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     fontFamily: 'monospace',
     fontStyle: 'italic',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   navBtn: {
     width: 28,
@@ -286,7 +293,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '3px 0',
+    height: 22,
     borderBottom: `1px solid ${colors.border.subtle}`,
   },
   label: {

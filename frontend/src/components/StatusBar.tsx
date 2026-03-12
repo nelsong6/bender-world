@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AlgorithmConfig } from '../engine/types';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -36,44 +37,44 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       value: algorithmConfig
         ? `${currentEpisode} / ${algorithmConfig.episodeLimit}`
         : `${currentEpisode}`,
-      color: '#4caf50',
+      color: colors.accent.green,
     },
     {
       label: 'Step',
       value: algorithmConfig
         ? `${currentStep} / ${algorithmConfig.stepLimit}`
         : `${currentStep}`,
-      color: '#2196f3',
+      color: colors.accent.blue,
     },
     {
       label: 'Ep. Reward',
       value: episodeReward.toFixed(0),
-      color: episodeReward >= 0 ? '#4caf50' : '#f44336',
+      color: episodeReward >= 0 ? colors.accent.green : colors.accent.red,
     },
     {
       label: 'Total Reward',
       value: totalReward.toFixed(0),
-      color: totalReward >= 0 ? '#4caf50' : '#f44336',
+      color: totalReward >= 0 ? colors.accent.green : colors.accent.red,
     },
     {
       label: 'Cans',
       value: `${cansCollected}`,
-      color: '#ffd700',
+      color: colors.accent.gold,
     },
     {
       label: 'Cans Left',
       value: `${cansRemaining}`,
-      color: '#ffd700',
+      color: colors.accent.gold,
     },
     {
       label: 'Epsilon',
       value: epsilon.toFixed(4),
-      color: '#ff9800',
+      color: colors.accent.orange,
     },
     {
       label: 'Gamma',
       value: algorithmConfig ? algorithmConfig.gamma.toFixed(4) : '0.0000',
-      color: '#9c27b0',
+      color: colors.accent.purple,
     },
   ];
 
@@ -82,7 +83,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       {items.map((item) => (
         <div key={item.label} style={styles.item}>
           <span style={styles.label}>{item.label}</span>
-          <span style={{ ...styles.value, color: item.color || '#e0e0e0' }}>
+          <span style={{ ...styles.value, color: item.color || colors.text.primary }}>
             {item.value}
           </span>
         </div>
@@ -100,10 +101,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: 4,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bg.raised,
     borderRadius: 8,
     padding: '8px 12px',
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   item: {
     display: 'flex',
@@ -114,7 +115,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 8px',
   },
   label: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 10,
     fontFamily: 'monospace',
     textTransform: 'uppercase' as const,

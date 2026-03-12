@@ -85,6 +85,9 @@ export const HelpGlossary: React.FC<Props> = ({ section }) => (
           <Term term="Convergence" id="glossary-convergence">
             The Q-values stabilize and the agent consistently achieves high reward. Visible as the chart flattening at a high level.
           </Term>
+          <Term term="Run" id="glossary-run">
+            The full training session — all episodes from start to completion. A run ends when the episode limit is reached.
+          </Term>
         </>
       )}
 

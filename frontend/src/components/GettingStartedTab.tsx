@@ -1,6 +1,22 @@
 import React from 'react';
 import { colors } from '../colors';
 import { Board } from './Board';
+import { GameBoard } from '../engine/board';
+import { mulberry32 } from '../engine/prng';
+import type { BoardState } from '../hooks/use-buffered-algorithm';
+
+// Static preview board — fixed seed so the Getting Started tab always shows the
+// same populated grid (cans + Bender) before the user starts training.
+const PREVIEW_BOARD: BoardState = (() => {
+  const rng = mulberry32(42);
+  const board = new GameBoard(rng);
+  board.shuffleCansAndBender();
+  return {
+    board: board.getBoardState(),
+    benderPosition: board.getBenderPosition(),
+    perceptionKey: board.getPerceptionState(),
+  };
+})();
 
 interface Props {
   onStartGranular: () => void;
@@ -81,6 +97,10 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
                   <span style={styles.termVal}>One complete run on the board (up to the step limit). The board resets each episode.</span>
                 </div>
                 <div style={styles.termRow}>
+                  <span style={styles.termKey}>Run</span>
+                  <span style={styles.termVal}>The full training session spanning all episodes, from start to completion.</span>
+                </div>
+                <div style={styles.termRow}>
                   <span style={styles.termKey}>Q-Value</span>
                   <span style={styles.termVal}>Expected reward for taking an action in a given state. Higher = better.</span>
                 </div>
@@ -107,7 +127,7 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
           <div style={styles.rightCol}>
             <div style={styles.boardWidget}>
               <div style={styles.boardLabel}>Bender's 10×10 Grid</div>
-              <Board boardState={null} />
+              <Board boardState={PREVIEW_BOARD} />
               <p style={styles.boardHint}>
                 Bender perceives 5 adjacent cells (N/S/E/W + current), each as Wall, Can, or Empty.
                 With 3⁵ = 243 possible perceptions and 5 actions, the Q-matrix has 1,215 entries to learn.

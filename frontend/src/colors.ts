@@ -1,91 +1,94 @@
 // Centralized color palette for the BenderWorld app.
+// Futurama-themed: oxidized steel backgrounds, acidic lime learning signals,
+// warm beer-amber for cans, electric accents — grimy New New York control panel.
 // All color values should be referenced from here — no raw hex/rgba in components.
 
 export const colors = {
   // ── Backgrounds (layered from deepest to most elevated) ──
+  // Grimy industrial control panels — dark oxidized steel
   bg: {
-    base: '#0d0d1a',
-    raised: '#14142b',
-    surface: '#1c1c3a',
-    overlay: '#252550',
+    base: '#0a0f14',
+    raised: '#141f2a',
+    surface: '#1a2a38',
+    overlay: '#223d4e',
   },
 
   // ── Borders ──
   border: {
-    subtle: '#2a2a4e',
-    strong: '#3a3a5e',
+    subtle: '#2a3f52',
+    strong: '#3d5666',
   },
 
   // ── Text ──
   text: {
-    primary: '#e2e2ef',
-    secondary: '#a0a0be',
-    tertiary: '#6e6e8a',
-    disabled: '#4a4a64',
+    primary: '#d4e4f0',
+    secondary: '#96aac0',
+    tertiary: '#6a7c8a',
+    disabled: '#4a5566',
   },
 
   // ── Accent colors ──
   accent: {
-    green: '#4caf50',
-    greenLight: '#66bb6a',
-    gold: '#ffd700',
-    blue: '#6bb8f0',
-    orange: '#ff9800',
-    red: '#f44336',
-    teal: '#30c8b0',
-    purple: '#7c6cf0',
+    green: '#5fd64d',
+    greenLight: '#7aed66',
+    gold: '#f5c842',
+    blue: '#4da6ff',
+    orange: '#ff8c3d',
+    red: '#ff5555',
+    teal: '#2fbfc9',
+    purple: '#b876ff',
   },
 
   // ── Board ──
   board: {
-    background: '#1a1a2e',
-    gridLine: '#333355',
-    labelText: '#888',
-    wallStroke: '#444',
-    unexploredFill: '#c8c8c8',
-    unexploredBorder: '#808080',
-    exploredFill: '#c8c8c8',
-    exploredBorder: '#3a6fb0',
-    currentFill: '#c8c8c8',
-    currentBorder: '#3a8a3a',
+    background: '#0f1820',
+    gridLine: '#293d4d',
+    labelText: '#7a8c9a',
+    wallStroke: '#5a6f7f',
+    unexploredFill: '#8c9cac',
+    unexploredBorder: '#5a6a7a',
+    exploredFill: '#8c9cac',
+    exploredBorder: '#2fbfc9',
+    currentFill: '#8c9cac',
+    currentBorder: '#5fd64d',
   },
 
   // ── Chart ──
   chart: {
-    rewardLine: '#4caf50',
-    rewardGlow: 'rgba(76, 175, 80, 0.35)',
-    rewardFill: 'rgba(76, 175, 80, 0.08)',
-    maLine: '#ff9800',
-    maGlow: 'rgba(255, 152, 0, 0.3)',
-    maFill: 'rgba(255, 152, 0, 0.06)',
-    grid: 'rgba(124, 108, 240, 0.07)',
-    axis: 'rgba(160, 160, 190, 0.5)',
-    legend: 'rgba(180, 190, 230, 0.7)',
-    tooltipBg: 'rgba(20, 20, 40, 0.92)',
-    tooltipBorder: 'rgba(124, 108, 240, 0.2)',
-    crosshair: 'rgba(160, 160, 190, 0.25)',
+    rewardLine: '#5fd64d',
+    rewardGlow: 'rgba(95, 214, 77, 0.4)',
+    rewardFill: 'rgba(95, 214, 77, 0.1)',
+    maLine: '#ff8c3d',
+    maGlow: 'rgba(255, 140, 61, 0.35)',
+    maFill: 'rgba(255, 140, 61, 0.08)',
+    grid: 'rgba(77, 166, 255, 0.08)',
+    axis: 'rgba(150, 170, 192, 0.45)',
+    legend: 'rgba(184, 207, 230, 0.65)',
+    tooltipBg: 'rgba(10, 15, 20, 0.94)',
+    tooltipBorder: 'rgba(77, 166, 255, 0.25)',
+    crosshair: 'rgba(150, 170, 192, 0.3)',
   },
 
   // ── Perception ──
   perception: {
-    wall: '#f44336',
-    can: '#ffd700',
-    empty: '#666',
+    wall: '#ff5555',
+    can: '#f5c842',
+    empty: '#5a6f7f',
   },
 
   // ── Q-value heatmap ──
   qValue: {
-    negative: '#f44336',
-    zero: '#666',
-    positive: '#4caf50',
-    highlight: '#ffd700',
+    negative: '#ff5555',
+    zero: '#5a6f7f',
+    positive: '#5fd64d',
+    highlight: '#f5c842',
   },
 
   // ── Interactive states ──
   interactive: {
-    hover: '#252550',
-    selected: '#2e2e5a',
-    activeGlow: 'rgba(124, 108, 240, 0.4)',
+    hover: '#2a4a62',
+    selected: '#3a5a78',
+    activeGlow: 'rgba(184, 118, 255, 0.45)',
   },
 } as const;
 

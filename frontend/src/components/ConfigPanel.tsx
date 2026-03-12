@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlgorithmConfig, DEFAULT_CONFIG, MoveResult, DEFAULT_REWARD_CONFIG } from '../engine/types';
 import { PRESETS } from '../data/presets';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -243,14 +244,14 @@ const SliderParam: React.FC<SliderParamProps> = ({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bg.raised,
     borderRadius: 8,
     padding: 16,
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   title: {
     margin: '0 0 12px 0',
-    color: '#e0e0e0',
+    color: colors.text.primary,
     fontSize: 16,
     fontFamily: 'monospace',
   },
@@ -258,7 +259,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   presetLabel: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginBottom: 6,
     fontFamily: 'monospace',
@@ -270,9 +271,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   presetButton: {
     padding: '6px 12px',
-    backgroundColor: '#2a2a4a',
-    color: '#e0e0e0',
-    border: '1px solid #444',
+    backgroundColor: colors.bg.overlay,
+    color: colors.text.primary,
+    border: `1px solid ${colors.border.strong}`,
     borderRadius: 4,
     cursor: 'pointer',
     fontFamily: 'monospace',
@@ -287,35 +288,35 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
   rewardHeader: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
     marginTop: 12,
     marginBottom: 6,
-    borderTop: '1px solid #333',
+    borderTop: `1px solid ${colors.border.subtle}`,
     paddingTop: 8,
   },
   paramRow: {
     marginBottom: 10,
   },
   paramLabel: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 12,
     fontFamily: 'monospace',
     marginBottom: 2,
   },
   paramValue: {
-    color: '#4caf50',
+    color: colors.accent.green,
     fontWeight: 'bold',
   },
   slider: {
     width: '100%',
-    accentColor: '#4caf50',
+    accentColor: colors.accent.green,
   },
   hint: {
-    color: '#666',
+    color: colors.text.disabled,
     fontSize: 12,
     fontFamily: 'monospace',
     fontStyle: 'italic',
@@ -325,7 +326,7 @@ const styles: Record<string, React.CSSProperties> = {
   startButton: {
     width: '100%',
     padding: '10px 16px',
-    backgroundColor: '#4caf50',
+    backgroundColor: colors.accent.green,
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -336,8 +337,8 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'background-color 0.2s',
   },
   disabledStartButton: {
-    backgroundColor: '#333',
-    color: '#666',
+    backgroundColor: colors.border.subtle,
+    color: colors.text.disabled,
     cursor: 'not-allowed',
   },
 };

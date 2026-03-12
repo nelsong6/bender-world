@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { BoardState } from '../hooks/use-buffered-algorithm';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -7,6 +8,7 @@ import type { BoardState } from '../hooks/use-buffered-algorithm';
 
 interface BoardProps {
   boardState: BoardState | null;
+  visitedCells?: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,29 +61,18 @@ function drawTileBackground(
   ctx.fillRect(x + border, y + border, size - border * 2, size - border * 2);
 }
 
-// Tile color schemes matching the original sprites
-const TILE = {
-  unexplored: { fill: '#c8c8c8', border: '#808080' },  // gray border (like bg-unexplored)
-  explored:   { fill: '#c8c8c8', border: '#3a6fb0' },  // blue border (like bg-explored)
-  current:    { fill: '#c8c8c8', border: '#3a8a3a' },  // green border (like bg-current)
-};
-
-// ---------------------------------------------------------------------------
-// Other colors
-// ---------------------------------------------------------------------------
-
-const COLORS = {
-  background: '#1a1a2e',
-  gridLine: '#333355',
-  labelText: '#888',
-  wallStroke: '#444',
+// Tile color schemes from centralized palette
+const TILE: Record<string, { fill: string; border: string }> = {
+  unexplored: { fill: colors.board.unexploredFill, border: colors.board.unexploredBorder },
+  explored:   { fill: colors.board.exploredFill, border: colors.board.exploredBorder },
+  current:    { fill: colors.board.currentFill, border: colors.board.currentBorder },
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export const Board: React.FC<BoardProps> = ({ boardState }) => {
+export const Board: React.FC<BoardProps> = ({ boardState, visitedCells }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const spritesRef = useRef<SpriteMap | null>(null);
@@ -96,14 +87,16 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
   }, []);
 
   // Track visited cells — reset when board goes null (new episode/reset)
+  // Skip internal tracking when visitedCells prop is provided (granular step mode)
   useEffect(() => {
+    if (visitedCells) return;
     if (!boardState) {
       visitedRef.current.clear();
       return;
     }
     const [bx, by] = boardState.benderPosition;
     visitedRef.current.add(`${bx},${by}`);
-  }, [boardState]);
+  }, [boardState, visitedCells]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -119,11 +112,11 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     const cellSize = gridSize / 10;
 
     // Clear
-    ctx.fillStyle = COLORS.background;
+    ctx.fillStyle = colors.board.background;
     ctx.fillRect(0, 0, size, size);
 
     // Draw column labels (1-10) at top
-    ctx.fillStyle = COLORS.labelText;
+    ctx.fillStyle = colors.board.labelText;
     ctx.font = `${Math.max(10, cellSize * 0.3)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -169,7 +162,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
         let tile = TILE.unexplored;
         if (hasBender) {
           tile = TILE.current;
-        } else if (visitedRef.current.has(`${x},${y}`)) {
+        } else if ((visitedCells ?? visitedRef.current).has(`${x},${y}`)) {
           tile = TILE.explored;
         }
         drawTileBackground(ctx, drawX, drawY, drawSize, tile.fill, tile.border);
@@ -195,10 +188,10 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
           ctx.textBaseline = 'middle';
           ctx.font = `bold ${Math.max(12, cellSize * 0.45)}px monospace`;
           if (hasBender) {
-            ctx.fillStyle = '#2a6e2a';
+            ctx.fillStyle = colors.board.currentBorder;
             ctx.fillText('B', cellX + cellSize / 2, cellY + cellSize / 2);
           } else if (hasCan) {
-            ctx.fillStyle = '#3a6fb0';
+            ctx.fillStyle = colors.board.exploredBorder;
             ctx.fillText('C', cellX + cellSize / 2, cellY + cellSize / 2);
           }
         }
@@ -207,7 +200,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
         if (boardState) {
           const cell = boardState.board[x][y];
           if (cell.walls.length > 0) {
-            ctx.strokeStyle = COLORS.wallStroke;
+            ctx.strokeStyle = colors.board.wallStroke;
             ctx.lineWidth = 3;
             for (const wall of cell.walls) {
               ctx.beginPath();
@@ -232,7 +225,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
     }
 
     // Draw grid lines
-    ctx.strokeStyle = COLORS.gridLine;
+    ctx.strokeStyle = colors.board.gridLine;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 10; i++) {
       ctx.beginPath();
@@ -245,7 +238,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
       ctx.lineTo(labelMargin + gridSize, labelMargin + i * cellSize);
       ctx.stroke();
     }
-  }, [boardState]);
+  }, [boardState, visitedCells]);
 
   // Resize canvas to fit container
   useEffect(() => {
@@ -285,11 +278,6 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
   return (
     <div ref={containerRef} style={styles.container}>
       <canvas ref={canvasRef} style={styles.canvas} />
-      {!boardState && (
-        <div style={styles.placeholder}>
-          Configure and start to see the board
-        </div>
-      )}
     </div>
   );
 };
@@ -309,12 +297,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   canvas: {
     borderRadius: 8,
-    border: '1px solid #333',
-  },
-  placeholder: {
-    position: 'absolute',
-    color: '#666',
-    fontSize: 16,
-    fontFamily: 'monospace',
+    border: `1px solid ${colors.border.subtle}`,
   },
 };

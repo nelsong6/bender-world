@@ -1,4 +1,5 @@
 import React from 'react';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -33,14 +34,14 @@ function parsePerception(perceptionKey: string): ParsedPercepts | null {
 }
 
 const PERCEPT_COLORS: Record<string, string> = {
-  Wall: '#f44336',
-  Can: '#ffd700',
-  Empty: '#666',
+  Wall: colors.perception.wall,
+  Can: colors.perception.can,
+  Empty: colors.perception.empty,
 };
 
 function perceptStyle(percept: string): React.CSSProperties {
   return {
-    color: PERCEPT_COLORS[percept] || '#888',
+    color: PERCEPT_COLORS[percept] || colors.text.tertiary,
     fontWeight: 'bold',
   };
 }
@@ -119,19 +120,19 @@ export const PerceptionDisplay: React.FC<PerceptionDisplayProps> = ({ perception
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bg.raised,
     borderRadius: 8,
     padding: 12,
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   title: {
     margin: '0 0 8px 0',
-    color: '#e0e0e0',
+    color: colors.text.primary,
     fontSize: 14,
     fontFamily: 'monospace',
   },
   position: {
-    color: '#4caf50',
+    color: colors.accent.green,
     fontSize: 12,
     fontWeight: 'normal',
   },
@@ -152,25 +153,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
   },
   compassCenter: {
-    backgroundColor: '#252540',
+    backgroundColor: colors.bg.overlay,
     borderRadius: 4,
     padding: '4px 8px',
   },
   compassCenterMain: {
-    backgroundColor: '#2a2a5a',
+    backgroundColor: colors.interactive.selected,
     borderRadius: 4,
     padding: '4px 8px',
-    border: '1px solid #4caf50',
+    border: `1px solid ${colors.accent.green}`,
   },
   dirLabel: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 9,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 1,
   },
   empty: {
-    color: '#666',
+    color: colors.text.disabled,
     fontSize: 12,
     fontFamily: 'monospace',
     fontStyle: 'italic',
@@ -178,7 +179,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 16,
   },
   id: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
     textAlign: 'center',

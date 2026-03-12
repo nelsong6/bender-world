@@ -8,6 +8,7 @@ import {
   getPerceptionKeyById,
 } from '../engine/perception';
 import type { PerceptionStateData } from '../engine/perception';
+import { colors } from '../colors';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -40,9 +41,9 @@ const PERCEPT_OPTIONS: Percept[] = [Percept.Wall, Percept.Empty, Percept.Can];
 const MAX_VISIBLE_ROWS = 20;
 
 const PERCEPT_COLORS: Record<string, string> = {
-  Wall: '#f44336',
-  Can: '#ffd700',
-  Empty: '#666',
+  Wall: colors.perception.wall,
+  Can: colors.perception.can,
+  Empty: colors.perception.empty,
 };
 
 // ---------------------------------------------------------------------------
@@ -157,7 +158,7 @@ export const QMatrixInspector: React.FC<QMatrixInspectorProps> = ({
                 <select
                   style={{
                     ...styles.perceptDropdown,
-                    color: PERCEPT_COLORS[selectorPercepts[dir]] || '#ccc',
+                    color: PERCEPT_COLORS[selectorPercepts[dir]] || colors.text.secondary,
                   }}
                   value={selectorPercepts[dir]}
                   onChange={(e) => handlePerceptChange(dir, e.target.value as Percept)}
@@ -172,17 +173,17 @@ export const QMatrixInspector: React.FC<QMatrixInspectorProps> = ({
         )}
 
         {/* Selected state Q-values detail */}
-        {selectedValues && (
+        {selectedStateId !== null && (
           <div style={styles.detailRow}>
-            {selectedValues.map((val, idx) => {
-              const isBest = hasBestSelected && val === bestSelectedValue && val !== 0;
+            {(selectedValues ?? [0, 0, 0, 0, 0]).map((val, idx) => {
+              const isBest = selectedValues && hasBestSelected && val === bestSelectedValue && val !== 0;
               return (
                 <div key={idx} style={styles.detailItem}>
                   <span style={styles.detailLabel}>{ACTION_FULL_NAMES[idx]}</span>
                   <span style={{
                     ...styles.detailValue,
                     ...(isBest ? styles.bestDetailValue : {}),
-                    color: val > 0 ? '#4caf50' : val < 0 ? '#f44336' : '#555',
+                    color: val > 0 ? colors.qValue.positive : val < 0 ? colors.qValue.negative : colors.text.disabled,
                   }}>
                     {val.toFixed(3)}
                   </span>
@@ -190,10 +191,6 @@ export const QMatrixInspector: React.FC<QMatrixInspectorProps> = ({
               );
             })}
           </div>
-        )}
-
-        {selectedStateId !== null && !selectedValues && (
-          <div style={styles.noData}>State {selectedStateId} has no Q-values yet</div>
         )}
       </div>
 
@@ -288,29 +285,29 @@ export const QMatrixInspector: React.FC<QMatrixInspectorProps> = ({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bg.raised,
     borderRadius: 8,
     padding: 12,
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   title: {
     margin: '0 0 8px 0',
-    color: '#e0e0e0',
+    color: colors.text.primary,
     fontSize: 14,
     fontFamily: 'monospace',
   },
   count: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 12,
     fontWeight: 'normal',
   },
   // Selector section
   selectorSection: {
-    backgroundColor: '#252540',
+    backgroundColor: colors.bg.overlay,
     borderRadius: 4,
     padding: 8,
     marginBottom: 8,
-    border: '1px solid #333',
+    border: `1px solid ${colors.border.subtle}`,
   },
   selectorRow: {
     display: 'flex',
@@ -319,16 +316,16 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 6,
   },
   selectorLabel: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
     whiteSpace: 'nowrap' as const,
   },
   stateDropdown: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
-    color: '#e0e0e0',
-    border: '1px solid #444',
+    backgroundColor: colors.bg.base,
+    color: colors.text.primary,
+    border: `1px solid ${colors.border.strong}`,
     borderRadius: 3,
     padding: '3px 6px',
     fontFamily: 'monospace',
@@ -344,11 +341,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    flex: '1 1 auto',
+    flex: '1 1 0',
     minWidth: 50,
   },
   perceptLabel: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 9,
     fontFamily: 'monospace',
     textTransform: 'uppercase' as const,
@@ -356,8 +353,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   perceptDropdown: {
     width: '100%',
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #444',
+    backgroundColor: colors.bg.base,
+    border: `1px solid ${colors.border.strong}`,
     borderRadius: 3,
     padding: '2px 4px',
     fontFamily: 'monospace',
@@ -370,17 +367,17 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap' as const,
   },
   detailItem: {
-    flex: '1 1 auto',
+    flex: '1 1 0',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.bg.base,
     borderRadius: 3,
     padding: '4px 6px',
     minWidth: 50,
   },
   detailLabel: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 9,
     fontFamily: 'monospace',
     textTransform: 'uppercase' as const,
@@ -392,12 +389,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
   },
   bestDetailValue: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    backgroundColor: 'rgba(95, 214, 77, 0.2)',
     borderRadius: 2,
     padding: '0 4px',
   },
   noData: {
-    color: '#666',
+    color: colors.text.disabled,
     fontSize: 10,
     fontFamily: 'monospace',
     fontStyle: 'italic',
@@ -406,13 +403,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   // Current state
   currentState: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     fontFamily: 'monospace',
     marginBottom: 8,
   },
   currentStateValue: {
-    color: '#4caf50',
+    color: colors.accent.green,
     fontWeight: 'bold',
   },
   // Table
@@ -431,21 +428,21 @@ const styles: Record<string, React.CSSProperties> = {
   th: {
     position: 'sticky' as const,
     top: 0,
-    backgroundColor: '#252540',
-    color: '#aaa',
+    backgroundColor: colors.bg.overlay,
+    color: colors.text.secondary,
     padding: '6px 4px',
     textAlign: 'center' as const,
-    borderBottom: '1px solid #444',
+    borderBottom: `1px solid ${colors.border.strong}`,
     fontSize: 11,
     zIndex: 1,
   },
   td: {
     padding: '4px',
     textAlign: 'center' as const,
-    borderBottom: '1px solid #2a2a3e',
+    borderBottom: `1px solid ${colors.border.subtle}`,
   },
   stateIdCell: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontWeight: 'bold',
     textAlign: 'left' as const,
     paddingLeft: 8,
@@ -454,32 +451,32 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 10,
   },
   positiveValue: {
-    color: '#4caf50',
+    color: colors.qValue.positive,
   },
   negativeValue: {
-    color: '#f44336',
+    color: colors.qValue.negative,
   },
   zeroValue: {
-    color: '#555',
+    color: colors.text.disabled,
   },
   bestValueCell: {
     fontWeight: 'bold',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(95, 214, 77, 0.1)',
   },
   highlightRow: {
-    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    backgroundColor: 'rgba(95, 214, 77, 0.15)',
   },
   selectedRow: {
-    backgroundColor: 'rgba(33, 150, 243, 0.15)',
+    backgroundColor: 'rgba(77, 166, 255, 0.15)',
   },
   highlightCell: {
-    color: '#4caf50',
+    color: colors.accent.green,
   },
   selectedCell: {
-    color: '#2196f3',
+    color: colors.accent.blue,
   },
   empty: {
-    color: '#666',
+    color: colors.text.disabled,
     fontSize: 12,
     fontFamily: 'monospace',
     fontStyle: 'italic',
@@ -487,7 +484,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center' as const,
   },
   emptyTd: {
-    color: '#666',
+    color: colors.text.disabled,
     fontSize: 12,
     fontStyle: 'italic',
     padding: 16,

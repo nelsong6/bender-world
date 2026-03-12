@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBufferedAlgorithm } from './hooks/use-buffered-algorithm';
 import { Board } from './components/Board';
 import { ConfigPanel } from './components/ConfigPanel';
@@ -15,6 +15,7 @@ import { HelpGlossary, HELP_SECTIONS, type HelpSectionId } from './components/He
 import { GettingStartedTab } from './components/GettingStartedTab';
 import { colors } from './colors';
 import { DEFAULT_CONFIG, type AlgorithmConfig } from './engine/types';
+import { QMatrix } from './engine/q-matrix';
 
 // ---------------------------------------------------------------------------
 // App Component
@@ -49,6 +50,33 @@ const App: React.FC = () => {
   useEffect(() => {
     setStepIndex(0);
   }, [algorithm.lastStepHistory]);
+
+  // Pre-start keyboard shortcut: → auto-starts and steps into granular mode
+  useEffect(() => {
+    if (hasStarted) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.code === 'ArrowRight' && !e.shiftKey) {
+        e.preventDefault();
+        algorithm.start(DEFAULT_CONFIG);
+        algorithm.setCaptureSteps(true);
+        setActiveTab('granular');
+        algorithm.step();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hasStarted, algorithm]);
+
+  // Reconstruct per-step QMatrix for granular tab
+  const granularQMatrix = useMemo(() => {
+    const activeStep = algorithm.lastStepHistory?.[stepIndex] ?? null;
+    if (!activeStep) return algorithm.qMatrix;
+    const qm = new QMatrix();
+    qm.restore(activeStep.qMatrixSnapshot);
+    return qm;
+  }, [algorithm.lastStepHistory, stepIndex, algorithm.qMatrix]);
 
   // --- Navigation callbacks ---
 
@@ -194,32 +222,50 @@ const App: React.FC = () => {
           )}
 
           {/* Granular Step */}
-          {activeTab === 'granular' && (
-            <div style={styles.granularLayout}>
-              <div style={styles.granularLeftCol}>
-                <Board boardState={algorithm.boardState} />
+          {activeTab === 'granular' && (() => {
+            const activeStep = algorithm.lastStepHistory?.[stepIndex] ?? null;
+            const granularBoardState = activeStep?.boardSnapshot ?? algorithm.boardState;
+            const granularPerceptionKey = activeStep?.boardSnapshot.perceptionKey ?? algorithm.currentPerceptionId;
+            const granularBenderPosition = activeStep?.boardSnapshot.benderPosition ?? algorithm.boardState?.benderPosition ?? null;
+            const granularVisited = algorithm.lastStepHistory
+              ? new Set(algorithm.lastStepHistory.slice(0, stepIndex + 1).map(s => {
+                  const [bx, by] = s.boardSnapshot.benderPosition;
+                  return `${bx},${by}`;
+                }))
+              : undefined;
+            return (
+              <div style={styles.granularLayout}>
+                <div style={styles.granularLeftCol}>
+                  <Board boardState={granularBoardState} visitedCells={granularVisited} />
+                </div>
+                <div style={styles.granularRightCol}>
+                  <div style={styles.granularTopRow}>
+                    <div style={styles.granularTopRowHalf}>
+                      <StepWalkthrough
+                        stepHistory={algorithm.lastStepHistory}
+                        currentStepIndex={stepIndex}
+                        onStepIndexChange={setStepIndex}
+                        onNextEpisode={algorithm.step}
+                        onPrevEpisode={algorithm.goBack}
+                        canGoBack={algorithm.canGoBack}
+                        algorithmEnded={algorithm.algorithmEnded}
+                      />
+                    </div>
+                    <div style={styles.granularTopRowHalf}>
+                      <PerceptionDisplay
+                        perceptionKey={granularPerceptionKey}
+                        benderPosition={granularBenderPosition}
+                      />
+                    </div>
+                  </div>
+                  <QMatrixInspector
+                    qMatrix={granularQMatrix}
+                    currentPerceptionId={granularPerceptionKey}
+                  />
+                </div>
               </div>
-              <div style={styles.granularRightCol}>
-                <StepWalkthrough
-                  stepHistory={algorithm.lastStepHistory}
-                  currentStepIndex={stepIndex}
-                  onStepIndexChange={setStepIndex}
-                  onNextEpisode={algorithm.step}
-                  onPrevEpisode={algorithm.goBack}
-                  canGoBack={algorithm.canGoBack}
-                  algorithmEnded={algorithm.algorithmEnded}
-                />
-                <PerceptionDisplay
-                  perceptionKey={algorithm.currentPerceptionId}
-                  benderPosition={algorithm.boardState?.benderPosition ?? null}
-                />
-                <QMatrixInspector
-                  qMatrix={algorithm.qMatrix}
-                  currentPerceptionId={algorithm.currentPerceptionId}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Help / Glossary */}
           {activeTab === 'glossary' && (
@@ -395,5 +441,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column' as const,
     gap: 12,
     overflowY: 'auto' as const,
+  },
+  granularTopRow: {
+    display: 'flex',
+    gap: 12,
+  },
+  granularTopRowHalf: {
+    flex: '1 1 0',
+    minWidth: 0,
   },
 };
