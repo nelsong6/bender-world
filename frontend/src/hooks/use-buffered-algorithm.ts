@@ -3,10 +3,9 @@ import type {
   AlgorithmConfig,
   EpisodeSummary,
   MoveType,
-  StepResult,
 } from '../engine/types';
 import { QMatrix } from '../engine/q-matrix';
-import { EpisodeBuffer, type EpisodeBufferEntry } from '../engine/episode-buffer';
+import { EpisodeBuffer, type EpisodeBufferEntry, type WalkthroughStep } from '../engine/episode-buffer';
 import { AnimationClock } from '../engine/animation-clock';
 import { type AlgorithmSnapshot } from '../engine/algorithm-runner';
 
@@ -55,7 +54,7 @@ export function useBufferedAlgorithm() {
   const [qMatrix, setQMatrix] = useState<QMatrix | null>(null);
   const [currentPerceptionId, setCurrentPerceptionId] = useState('');
   const [canGoBack, setCanGoBack] = useState(false);
-  const [lastStepHistory, setLastStepHistory] = useState<StepResult[] | null>(null);
+  const [lastStepHistory, setLastStepHistory] = useState<WalkthroughStep[] | null>(null);
 
   // Sync UI state from buffer's runner
   const syncState = useCallback(() => {

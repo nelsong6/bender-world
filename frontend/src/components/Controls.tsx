@@ -39,12 +39,8 @@ function sliderToSpeed(slider: number): number {
   return Math.round(Math.exp(logMin + (slider / 100) * (logMax - logMin)));
 }
 
-function getSpeedLabel(speed: number): string {
-  return `${speed} ep/s`;
-}
-
 // ---------------------------------------------------------------------------
-// Component
+// Component — flat title bar strip
 // ---------------------------------------------------------------------------
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -66,7 +62,6 @@ export const Controls: React.FC<ControlsProps> = ({
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ignore if focused on an input
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
@@ -93,113 +88,80 @@ export const Controls: React.FC<ControlsProps> = ({
   }, [handleKeyDown]);
 
   return (
-    <div style={styles.container} data-help="Space=play/pause, Right=step, Shift+Right=step 10, Left=back">
-      <div style={styles.buttonRow}>
-        {/* Play/Pause */}
-        <button
-          onClick={isRunning ? onPause : onPlay}
-          disabled={!canPlay}
-          style={{
-            ...styles.button,
-            ...styles.playButton,
-            ...(!canPlay ? styles.disabledButton : {}),
-          }}
-          title="Space"
-        >
-          {isRunning ? 'Pause' : 'Play'}
-        </button>
+    <div style={styles.bar} data-help="Space=play/pause, Right=step, Shift+Right=step 10, Left=back">
+      {/* Buttons */}
+      <button
+        onClick={isRunning ? onPause : onPlay}
+        disabled={!canPlay}
+        style={{ ...styles.btn, ...styles.playBtn, ...(!canPlay ? styles.disabled : {}) }}
+        title="Space"
+      >
+        {isRunning ? 'Pause' : 'Play'}
+      </button>
 
-        {/* Back */}
-        <button
-          onClick={onBack}
-          disabled={!canGoBack || isRunning}
-          style={{
-            ...styles.button,
-            ...styles.backButton,
-            ...(!canGoBack || isRunning ? styles.disabledButton : {}),
-          }}
-          title="Left arrow"
-        >
-          Back
-        </button>
+      <button
+        onClick={onBack}
+        disabled={!canGoBack || isRunning}
+        style={{ ...styles.btn, ...styles.backBtn, ...(!canGoBack || isRunning ? styles.disabled : {}) }}
+        title="Left arrow"
+      >
+        Back
+      </button>
 
-        {/* Step */}
-        <button
-          onClick={onStep}
-          disabled={!canStep}
-          style={{
-            ...styles.button,
-            ...styles.stepButton,
-            ...(!canStep ? styles.disabledButton : {}),
-          }}
-          title="Right arrow"
-        >
-          Step
-        </button>
+      <button
+        onClick={onStep}
+        disabled={!canStep}
+        style={{ ...styles.btn, ...styles.stepBtn, ...(!canStep ? styles.disabled : {}) }}
+        title="Right arrow"
+      >
+        Step
+      </button>
 
-        {/* Step 10 */}
-        <button
-          onClick={() => onStepN(10)}
-          disabled={!canStep}
-          style={{
-            ...styles.button,
-            ...styles.stepButton,
-            ...(!canStep ? styles.disabledButton : {}),
-          }}
-          title="Shift+Right"
-        >
-          +10
-        </button>
+      <button
+        onClick={() => onStepN(10)}
+        disabled={!canStep}
+        style={{ ...styles.btn, ...styles.stepBtn, ...(!canStep ? styles.disabled : {}) }}
+        title="Shift+Right"
+      >
+        +10
+      </button>
 
-        {/* Step 100 */}
-        <button
-          onClick={() => onStepN(100)}
-          disabled={!canStep}
-          style={{
-            ...styles.button,
-            ...styles.stepNButton,
-            ...(!canStep ? styles.disabledButton : {}),
-          }}
-        >
-          +100
-        </button>
+      <button
+        onClick={() => onStepN(100)}
+        disabled={!canStep}
+        style={{ ...styles.btn, ...styles.stepNBtn, ...(!canStep ? styles.disabled : {}) }}
+      >
+        +100
+      </button>
 
-        {/* Reset */}
-        <button
-          onClick={onReset}
-          disabled={!hasStarted}
-          style={{
-            ...styles.button,
-            ...styles.resetButton,
-            ...(!hasStarted ? styles.disabledButton : {}),
-          }}
-        >
-          Reset
-        </button>
-      </div>
+      <button
+        onClick={onReset}
+        disabled={!hasStarted}
+        style={{ ...styles.btn, ...styles.resetBtn, ...(!hasStarted ? styles.disabled : {}) }}
+      >
+        Reset
+      </button>
 
-      {/* Speed slider */}
-      <div style={styles.speedSection}>
-        <div style={styles.speedLabel}>
-          Speed: <span style={styles.speedValue}>{getSpeedLabel(speed)}</span>
-        </div>
-        <div style={styles.speedSliderRow}>
-          <span style={styles.speedMark}>1</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={speedToSlider(speed)}
-            onChange={(e) => onSpeedChange(sliderToSpeed(parseInt(e.target.value)))}
-            style={styles.speedSlider}
-          />
-          <span style={styles.speedMark}>500</span>
-        </div>
-      </div>
+      {/* Separator */}
+      <div style={styles.sep} />
 
-      {algorithmEnded && (
-        <div style={styles.endedBanner}>Training Complete</div>
-      )}
+      {/* Speed */}
+      <span style={styles.speedLabel}>
+        Speed: <span style={styles.speedValue}>{speed} ep/s</span>
+      </span>
+      <span style={styles.speedMark}>1</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={speedToSlider(speed)}
+        onChange={(e) => onSpeedChange(sliderToSpeed(parseInt(e.target.value)))}
+        style={styles.slider}
+        data-help="Logarithmic speed: 1–500 episodes per second"
+      />
+      <span style={styles.speedMark}>500</span>
+
+      {algorithmEnded && <span style={styles.endedBadge}>Complete</span>}
     </div>
   );
 };
@@ -209,89 +171,87 @@ export const Controls: React.FC<ControlsProps> = ({
 // ---------------------------------------------------------------------------
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    backgroundColor: colors.bg.surface,
-    borderRadius: 8,
-    padding: 12,
-    border: `1px solid ${colors.border.subtle}`,
-  },
-  buttonRow: {
+  bar: {
     display: 'flex',
-    gap: 6,
-    marginBottom: 12,
-    flexWrap: 'wrap' as const,
+    alignItems: 'center',
+    gap: 4,
+    padding: '6px 24px',
+    backgroundColor: colors.bg.raised,
+    borderBottom: `1px solid ${colors.border.subtle}`,
   },
-  button: {
-    padding: '7px 10px',
+  btn: {
+    padding: '5px 10px',
     border: 'none',
-    borderRadius: 4,
+    borderRadius: 3,
     cursor: 'pointer',
     fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
-    transition: 'background-color 0.2s',
   },
-  playButton: {
+  playBtn: {
     backgroundColor: colors.accent.green,
     color: '#fff',
-    flex: '1 1 auto',
+    minWidth: 52,
   },
-  backButton: {
+  backBtn: {
     backgroundColor: colors.accent.purple,
     color: '#fff',
   },
-  stepButton: {
+  stepBtn: {
     backgroundColor: colors.accent.blue,
     color: '#fff',
   },
-  stepNButton: {
+  stepNBtn: {
     backgroundColor: '#4a88c0',
     color: '#fff',
   },
-  resetButton: {
+  resetBtn: {
     backgroundColor: colors.accent.red,
     color: '#fff',
   },
-  disabledButton: {
+  disabled: {
     opacity: 0.4,
     cursor: 'not-allowed',
   },
-  speedSection: {
-    marginTop: 4,
+  sep: {
+    width: 1,
+    height: 18,
+    backgroundColor: colors.border.subtle,
+    marginLeft: 8,
+    marginRight: 8,
+    flexShrink: 0,
   },
   speedLabel: {
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'monospace',
-    marginBottom: 4,
+    whiteSpace: 'nowrap' as const,
+    flexShrink: 0,
   },
   speedValue: {
     color: colors.accent.green,
-  },
-  speedSliderRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  speedSlider: {
-    flex: 1,
-    accentColor: colors.accent.green,
+    fontWeight: 'bold',
   },
   speedMark: {
     color: colors.text.tertiary,
     fontSize: 10,
     fontFamily: 'monospace',
-    whiteSpace: 'nowrap' as const,
+    flexShrink: 0,
   },
-  endedBanner: {
-    marginTop: 10,
-    padding: '8px 12px',
+  slider: {
+    width: 120,
+    flexShrink: 0,
+    accentColor: colors.accent.green,
+  },
+  endedBadge: {
+    marginLeft: 8,
+    padding: '3px 8px',
     backgroundColor: '#2e7d32',
     color: '#fff',
-    borderRadius: 4,
-    textAlign: 'center' as const,
+    borderRadius: 3,
     fontFamily: 'monospace',
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: 'bold',
+    flexShrink: 0,
   },
 };

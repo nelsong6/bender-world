@@ -1,10 +1,19 @@
-import type { AlgorithmConfig, EpisodeSummary, StepResult } from './types';
+import type { AlgorithmConfig, EpisodeSummary, StepResult, MoveType } from './types';
 import { AlgorithmRunner, type AlgorithmSnapshot } from './algorithm-runner';
+
+export interface WalkthroughStep {
+  step: StepResult;
+  boardSnapshot: {
+    board: { hasCan: boolean; hasBender: boolean; walls: MoveType[] }[][];
+    benderPosition: [number, number];
+    perceptionKey: string;
+  };
+}
 
 export interface EpisodeBufferEntry {
   summary: EpisodeSummary;
   /** Full step history — only populated when captureSteps is true (micro mode). */
-  stepHistory?: StepResult[];
+  stepHistory?: WalkthroughStep[];
 }
 
 /**
@@ -193,7 +202,7 @@ export class EpisodeBuffer {
   private computeEpisodeWithSteps(): EpisodeBufferEntry | null {
     if (this.runner.algorithmEnded) return null;
 
-    const steps: StepResult[] = [];
+    const steps: WalkthroughStep[] = [];
     const epsilonAtStart = this.runner.getEpsilon();
     let lastStep: StepResult | null = null;
     let episodeNumber = -1;
@@ -210,7 +219,9 @@ export class EpisodeBuffer {
         break;
       }
 
-      steps.push(step);
+      // Capture board state after this step
+      const boardSnapshot = this.runner.getCurrentState();
+      steps.push({ step, boardSnapshot });
       lastStep = step;
     }
 

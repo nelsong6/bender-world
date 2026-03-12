@@ -5,38 +5,53 @@ import { colors } from '../colors';
 // Props
 // ---------------------------------------------------------------------------
 
-export type TabId = 'overview' | 'inspect' | 'walkthrough';
+export type TabId = 'getting-started' | 'config' | 'full' | 'granular' | 'glossary';
 
 interface TabBarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
 }
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'inspect', label: 'Inspect' },
-  { id: 'walkthrough', label: 'Walkthrough' },
+const TABS: { id: TabId; label: string; help: string }[] = [
+  { id: 'getting-started', label: 'Getting Started', help: 'Introduction, help bar guide, and quick-start buttons' },
+  { id: 'config', label: 'Config', help: 'Q-Learning parameters: epsilon, gamma, eta, episode/step limits, and presets' },
+  { id: 'full', label: 'Full Step', help: 'Episode-level view: board, chart, and status side by side' },
+  { id: 'granular', label: 'Granular Step', help: 'Step-by-step walkthrough: board, perception, Q-values, and move details for each action' },
+  { id: 'glossary', label: 'Help / Glossary', help: 'Reinforcement learning concepts, controls reference, and glossary of terms' },
 ];
 
 // ---------------------------------------------------------------------------
-// Component
+// Component — vertical sidebar tabs (matches eight-queens pattern)
 // ---------------------------------------------------------------------------
 
 export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange }) => {
   return (
-    <div style={styles.container}>
-      {TABS.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          style={{
-            ...styles.tab,
-            ...(activeTab === tab.id ? styles.activeTab : {}),
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div style={styles.bar}>
+      {TABS.map((tab, index) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <div
+            key={tab.id}
+            style={{
+              ...styles.wrapper,
+              ...(isActive ? styles.wrapperActive : styles.wrapperInactive),
+              ...(isActive && index === 0 ? { borderTop: 'none' } : {}),
+            }}
+          >
+            <button
+              onClick={() => onTabChange(tab.id)}
+              data-help={tab.help}
+              style={{
+                ...styles.tab,
+                color: isActive ? colors.text.primary : colors.text.tertiary,
+                fontWeight: isActive ? 'bold' : ('normal' as const),
+              }}
+            >
+              {tab.label}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -46,32 +61,44 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange }) => {
 // ---------------------------------------------------------------------------
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
+  bar: {
     display: 'flex',
-    gap: 2,
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
+    paddingBottom: 16,
+    gap: 0,
+  },
+  wrapper: {
+    padding: '1px 0 1px 1px',
+    position: 'relative' as const,
+    marginBottom: -1,
+    zIndex: 0,
+  },
+  wrapperActive: {
+    padding: 0,
+    borderLeft: `1px solid ${colors.border.subtle}`,
+    borderTop: `1px solid ${colors.border.subtle}`,
+    borderBottom: `1px solid ${colors.border.subtle}`,
+    borderRight: 'none',
     backgroundColor: colors.bg.raised,
-    borderRadius: 8,
-    padding: 3,
-    border: `1px solid ${colors.border.subtle}`,
+    marginRight: -1,
+    zIndex: 1,
   },
+  wrapperInactive: {},
   tab: {
-    flex: 1,
-    padding: '8px 12px',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-    fontFamily: 'monospace',
+    padding: '10px 16px',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontFamily: 'monospace',
     backgroundColor: 'transparent',
-    color: colors.text.tertiary,
-    transition: 'all 0.15s ease',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  activeTab: {
-    backgroundColor: colors.bg.overlay,
-    color: colors.text.primary,
-    boxShadow: `0 0 8px ${colors.interactive.activeGlow}`,
+    WebkitAppearance: 'none' as const,
+    appearance: 'none' as const,
+    outline: 'none',
+    border: 'none',
+    width: '100%',
+    display: 'block' as const,
+    whiteSpace: 'nowrap' as const,
+    letterSpacing: 0.3,
+    textAlign: 'left' as const,
+    cursor: 'pointer',
   },
 };

@@ -44,19 +44,20 @@ Hook: `useBufferedAlgorithm` wires everything to React state. Manages undo/redo 
 
 ## UI Layout (App.tsx)
 
-Two-column layout with tab-driven right panel.
+Sidebar + content layout matching eight-queens pattern.
 
-**Header:** Title + subtitle
+**Sticky top bar:**
+- `Header` — Title + subtitle
+- `HelpBar` — Shows `data-help` text on hover. Press `s` to pin/unpin. Glossary links open the Glossary tab.
+- `Controls` — Flat title bar strip: Play/Pause/Back/Step/+10/+100/Reset + logarithmic speed slider (1-500 ep/s)
 
-**Left column:**
-- `Board` — Canvas-drawn 10x10 grid with sprite overlays (Bender, beer can)
-- `Controls` — Play/Pause/Back/Step/+10/+100/Reset + logarithmic speed slider (1-500 ep/s)
-- `StatusBar` — Episode, Step, Rewards, Cans, Epsilon, Gamma
+**Left sidebar:** Vertical `TabBar` with 5 tabs (matches eight-queens pattern):
 
-**Right column (tabbed):**
-- **Overview tab:** ConfigPanel (presets + sliders) + SettingsSummary + EpisodeChart
-- **Inspect tab:** PerceptionDisplay (compass rose) + QMatrixInspector (state selector + table)
-- **Walkthrough tab:** StepWalkthrough (step slider + move/result/reward details)
+1. **Getting Started** — Welcome text, quick-start buttons, How It Works terms, Navigation guide
+2. **Config** — ConfigPanel (presets + sliders) + SettingsSummary
+3. **Full Step** — Board + StatusBar | EpisodeChart (2-column)
+4. **Granular Step** — Board | StepWalkthrough | PerceptionDisplay + QMatrixInspector (3-column, first-class citizen)
+5. **Help / Glossary** — HelpGlossary with section picker (Problem, Q-Learning, Q-Matrix, Perception, Controls, Presets)
 
 ## Animation Architecture
 
@@ -94,7 +95,8 @@ Max 50 undo slots. Back button pops undo stack, pushes to redo. Redo entries are
 - **Colors**: Centralized palette in `frontend/src/colors.ts` (new components use it; legacy components have inline hex)
 - **All styles**: inline `React.CSSProperties` objects — no CSS files, no Tailwind
 - **Chart**: Canvas-based with gradient fills, glow effects, HiDPI support, hover tooltips
-- **data-help**: Elements use `data-help` attributes for future HelpBar integration
+- **Help text**: Elements use `data-help` attributes. HelpBar displays text on hover; press `s` to pin/unpin. `data-help-glossary` links to glossary terms.
+- **TabBar**: Vertical sidebar tabs with active-tab border treatment (borderLeft/Top/Bottom, no borderRight, marginRight: -1)
 
 ## Sprites
 

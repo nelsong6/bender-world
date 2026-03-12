@@ -1,15 +1,19 @@
 import React from 'react';
 import { colors } from '../colors';
-import type { StepResult } from '../engine/types';
+import type { WalkthroughStep } from '../engine/episode-buffer';
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 interface StepWalkthroughProps {
-  stepHistory: StepResult[] | null;
+  stepHistory: WalkthroughStep[] | null;
   currentStepIndex: number;
   onStepIndexChange: (index: number) => void;
+  onNextEpisode: () => void;
+  onPrevEpisode: () => void;
+  canGoBack: boolean;
+  algorithmEnded: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,100 +35,156 @@ export const StepWalkthrough: React.FC<StepWalkthroughProps> = ({
   stepHistory,
   currentStepIndex,
   onStepIndexChange,
+  onNextEpisode,
+  onPrevEpisode,
+  canGoBack,
+  algorithmEnded,
 }) => {
-  if (!stepHistory || stepHistory.length === 0) {
-    return (
-      <div style={styles.container}>
-        <h3 style={styles.title}>Step Walkthrough</h3>
-        <div style={styles.empty}>
-          Step walkthrough is available when paused after running at least one episode.
-          Step history is captured in micro mode.
-        </div>
-      </div>
-    );
-  }
+  const hasSteps = stepHistory && stepHistory.length > 0;
+  const total = hasSteps ? stepHistory.length : 0;
+  const entry = hasSteps ? stepHistory[currentStepIndex] : null;
+  const step = entry?.step ?? null;
+  const atEnd = !!(hasSteps && currentStepIndex >= total - 1);
+  const atStart = !hasSteps || currentStepIndex <= 0;
 
-  const step = stepHistory[currentStepIndex];
-  if (!step) return null;
+  const handlePrev = () => {
+    if (!atStart) {
+      onStepIndexChange(currentStepIndex - 1);
+    }
+  };
 
-  const total = stepHistory.length;
+  const handleNext = () => {
+    if (hasSteps && !atEnd) {
+      onStepIndexChange(currentStepIndex + 1);
+    } else {
+      // At end of current episode (or no data) — step to next episode
+      onNextEpisode();
+    }
+  };
 
   return (
     <div style={styles.container}>
       <h3 style={styles.title}>
         Step Walkthrough
-        <span style={styles.counter}> {currentStepIndex + 1} / {total}</span>
+        {hasSteps && (
+          <span style={styles.counter}> step {currentStepIndex + 1} / {total}</span>
+        )}
       </h3>
 
-      {/* Step slider */}
+      {/* Episode nav */}
+      <div style={styles.episodeRow}>
+        <button
+          style={{
+            ...styles.episodeBtn,
+            ...(!canGoBack ? styles.disabledBtn : {}),
+          }}
+          disabled={!canGoBack}
+          onClick={onPrevEpisode}
+        >
+          &laquo; Prev Episode
+        </button>
+        <button
+          style={{
+            ...styles.episodeBtn,
+            ...styles.nextEpisodeBtn,
+            ...(algorithmEnded ? styles.disabledBtn : {}),
+          }}
+          disabled={algorithmEnded}
+          onClick={onNextEpisode}
+        >
+          Next Episode &raquo;
+        </button>
+      </div>
+
+      {/* Step nav */}
       <div style={styles.sliderRow}>
         <button
-          style={styles.navBtn}
-          disabled={currentStepIndex <= 0}
-          onClick={() => onStepIndexChange(currentStepIndex - 1)}
+          style={{
+            ...styles.navBtn,
+            ...(atStart ? styles.disabledBtn : {}),
+          }}
+          disabled={atStart}
+          onClick={handlePrev}
         >
           &lt;
         </button>
-        <input
-          type="range"
-          min={0}
-          max={total - 1}
-          value={currentStepIndex}
-          onChange={(e) => onStepIndexChange(parseInt(e.target.value))}
-          style={styles.slider}
-        />
+        {hasSteps ? (
+          <input
+            type="range"
+            min={0}
+            max={total - 1}
+            value={currentStepIndex}
+            onChange={(e) => onStepIndexChange(parseInt(e.target.value))}
+            style={styles.slider}
+          />
+        ) : (
+          <div style={styles.sliderPlaceholder}>
+            Click &gt; to step the first episode
+          </div>
+        )}
         <button
-          style={styles.navBtn}
-          disabled={currentStepIndex >= total - 1}
-          onClick={() => onStepIndexChange(currentStepIndex + 1)}
+          style={{
+            ...styles.navBtn,
+            ...(atEnd && algorithmEnded ? styles.disabledBtn : {}),
+          }}
+          disabled={atEnd && algorithmEnded}
+          onClick={handleNext}
         >
           &gt;
         </button>
       </div>
 
       {/* Step details */}
-      <div style={styles.details}>
-        <div style={styles.row}>
-          <span style={styles.label}>Position</span>
-          <span style={styles.value}>({step.benderPosition[0] + 1}, {step.benderPosition[1] + 1})</span>
+      {step ? (
+        <div style={styles.details}>
+          <div style={styles.row}>
+            <span style={styles.label}>Position</span>
+            <span style={styles.value}>({step.benderPosition[0] + 1}, {step.benderPosition[1] + 1})</span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Move</span>
+            <span style={styles.value}>{step.move}</span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Strategy</span>
+            <span style={{
+              ...styles.value,
+              color: step.wasRandomMove ? colors.accent.orange : colors.accent.blue,
+            }}>
+              {step.wasRandomMove ? 'Random' : 'Greedy'}
+            </span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Result</span>
+            <span style={{ ...styles.value, color: RESULT_COLORS[step.moveResult] || colors.text.primary }}>
+              {step.moveResult}
+            </span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Reward</span>
+            <span style={{
+              ...styles.value,
+              color: step.reward > 0 ? colors.accent.green : step.reward < 0 ? colors.accent.red : colors.text.tertiary,
+            }}>
+              {step.reward > 0 ? '+' : ''}{step.reward}
+            </span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Episode Reward</span>
+            <span style={styles.value}>{step.episodeReward}</span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Cans Collected</span>
+            <span style={styles.value}>{step.cansCollected}</span>
+          </div>
+          <div style={styles.row}>
+            <span style={styles.label}>Perception</span>
+            <span style={{ ...styles.value, fontSize: 10 }}>{step.perception}</span>
+          </div>
         </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Move</span>
-          <span style={{
-            ...styles.value,
-            color: step.wasRandomMove ? colors.accent.orange : colors.accent.blue,
-          }}>
-            {step.move} {step.wasRandomMove ? '(random)' : '(greedy)'}
-          </span>
-        </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Result</span>
-          <span style={{ ...styles.value, color: RESULT_COLORS[step.moveResult] || colors.text.primary }}>
-            {step.moveResult}
-          </span>
-        </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Reward</span>
-          <span style={{
-            ...styles.value,
-            color: step.reward > 0 ? colors.accent.green : step.reward < 0 ? colors.accent.red : colors.text.tertiary,
-          }}>
-            {step.reward > 0 ? '+' : ''}{step.reward}
-          </span>
-        </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Episode Reward</span>
-          <span style={styles.value}>{step.episodeReward}</span>
-        </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Cans Collected</span>
-          <span style={styles.value}>{step.cansCollected}</span>
-        </div>
-        <div style={styles.row}>
-          <span style={styles.label}>Perception</span>
-          <span style={{ ...styles.value, fontSize: 10 }}>{step.perception}</span>
-        </div>
-      </div>
+      ) : (
+        <div style={styles.empty}>No steps yet</div>
+      )}
     </div>
   );
 };
@@ -151,6 +211,31 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 'normal',
   },
+  episodeRow: {
+    display: 'flex',
+    gap: 6,
+    marginBottom: 8,
+  },
+  episodeBtn: {
+    flex: 1,
+    padding: '6px 10px',
+    border: 'none',
+    borderRadius: 4,
+    backgroundColor: colors.bg.overlay,
+    color: colors.text.secondary,
+    cursor: 'pointer',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  nextEpisodeBtn: {
+    backgroundColor: colors.accent.blue,
+    color: '#fff',
+  },
+  disabledBtn: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
   empty: {
     color: colors.text.tertiary,
     fontSize: 12,
@@ -158,13 +243,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontStyle: 'italic',
     textAlign: 'center',
     padding: 16,
-    lineHeight: 1.6,
   },
   sliderRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     marginBottom: 10,
+  },
+  sliderPlaceholder: {
+    flex: 1,
+    textAlign: 'center',
+    color: colors.text.tertiary,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    fontStyle: 'italic',
   },
   navBtn: {
     width: 28,
