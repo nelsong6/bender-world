@@ -1,5 +1,5 @@
 // Centralized color palette for the BenderWorld app.
-// Futurama-themed: oxidized steel backgrounds, acidic lime learning signals,
+// Futurama-themed: oxidized steel backgrounds, muted sage-green learning signals,
 // warm beer-amber for cans, electric accents — grimy New New York control panel.
 // All color values should be referenced from here — no raw hex/rgba in components.
 
@@ -29,8 +29,8 @@ export const colors = {
 
   // ── Accent colors ──
   accent: {
-    green: '#5fd64d',
-    greenLight: '#7aed66',
+    green: '#5a8e70',
+    greenLight: '#72a88a',
     gold: '#f5c842',
     blue: '#4da6ff',
     orange: '#ff8c3d',
@@ -50,14 +50,14 @@ export const colors = {
     exploredFill: '#8c9cac',
     exploredBorder: '#2fbfc9',
     currentFill: '#8c9cac',
-    currentBorder: '#5fd64d',
+    currentBorder: '#5a8e70',
   },
 
   // ── Chart ──
   chart: {
-    rewardLine: '#5fd64d',
-    rewardGlow: 'rgba(95, 214, 77, 0.4)',
-    rewardFill: 'rgba(95, 214, 77, 0.1)',
+    rewardLine: '#5a8e70',
+    rewardGlow: 'rgba(90, 142, 112, 0.4)',
+    rewardFill: 'rgba(90, 142, 112, 0.1)',
     maLine: '#ff8c3d',
     maGlow: 'rgba(255, 140, 61, 0.35)',
     maFill: 'rgba(255, 140, 61, 0.08)',
@@ -80,7 +80,7 @@ export const colors = {
   qValue: {
     negative: '#ff5555',
     zero: '#5a6f7f',
-    positive: '#5fd64d',
+    positive: '#5a8e70',
     highlight: '#f5c842',
   },
 

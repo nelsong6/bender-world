@@ -311,12 +311,12 @@ The main layout follows the eight-queens sidebar+content pattern:
 ```
 
 **Sticky top section** (`flexShrink: 0`, `zIndex: 160`):
-- Header with title + subtitle
+- Header with title + subtitle + Fry squinting image (far right, decorative, 64px tall, flush with bottom border)
 - HelpBar (always visible)
 - Controls bar (only when `hasStarted` — i.e., after config is submitted). Callbacks are tab-aware: on the Granular Step tab, Controls receives micro-step callbacks (`handleGranularStep`, etc.) instead of episode-level callbacks. A `microPlaying` state + `setInterval` drives auto-play at the step level.
 
 **Main section** (`flex: 1`, `flexDirection: row`, `minHeight: 0`):
-- Left sidebar: vertical `TabBar`
+- Left sidebar: vertical `TabBar` + Planet Express ship image (bottom, decorative, 120×90px, 40% opacity)
 - Optional secondary sidebar: glossary section picker (only on glossary tab)
 - Tab content area: `flex: 1`, scrolls independently
 
@@ -582,7 +582,7 @@ When no step data exists, all values show "—" in `colors.text.disabled` to mai
 
 ## Color Palette (`frontend/src/colors.ts`)
 
-Futurama-themed palette: oxidized steel backgrounds, acidic lime-green learning signals, warm beer-amber for cans, electric accents. All components import from `colors.ts` — no raw hex in components (except `#fff` for button text).
+Futurama-themed palette: oxidized steel backgrounds, muted sage-green learning signals, warm beer-amber for cans, electric accents. All components import from `colors.ts` — no raw hex in components (except `#fff` for button text).
 
 ```
 bg.base      = #0a0f14   (deep gunmetal steel)
@@ -598,8 +598,8 @@ text.secondary = #96aac0  (duller steel gray)
 text.tertiary  = #6a7c8a  (dim metal)
 text.disabled  = #4a5566  (very dark steel)
 
-accent.green      = #5fd64d   (acidic lime — play button, positive values, reward line)
-accent.greenLight = #7aed66   (brighter lime)
+accent.green      = #5a8e70   (muted sage — play button, positive values, reward line)
+accent.greenLight = #72a88a   (lighter sage)
 accent.gold       = #f5c842   (warm beer-amber — cans, held badge)
 accent.blue       = #4da6ff   (sharp electric blue — step buttons, greedy strategy)
 accent.orange     = #ff8c3d   (warm orange — moving average, random strategy, epsilon)
@@ -675,11 +675,17 @@ When the user clicks Step or Step-N, the clock enters sweep mode: it animates th
 ## Sprites (`frontend/public/sprites/`)
 
 PNG sprites for board rendering:
+
 - `bender.png` — Bender character (rendered on Bender's current cell)
 - `beer.png` — beer can (rendered on cells with cans)
 - `bender-and-beer.png` — combined sprite (when Bender stands on a can)
 
 Board.tsx loads these asynchronously via `new Image()`. While loading, falls back to text indicators ("B" for Bender, "C" for can).
+
+Decorative images (not used by Board):
+
+- `spaceship.png` — Planet Express ship (120×90px, displayed in left sidebar below tabs, 40% opacity)
+- `fry-squinting.png` — Fry squinting meme (41×57px, displayed in header bar far right, 50% opacity)
 
 ## UI Patterns & Conventions
 
@@ -827,4 +833,6 @@ Reverse-chronological record of significant changes, decisions, and context that
 - Added pre-start → (right arrow) shortcut: pressing → before training starts auto-starts with `DEFAULT_CONFIG`, switches to Granular Step tab, enables step capture, and steps one episode. Implemented as a `useEffect` in App.tsx that only runs when `!hasStarted` — no conflict with Controls.tsx's keyboard handler which only mounts after start. Explicitly calls `setCaptureSteps(true)` before `step()` because the tab-switching `useEffect` won't fire until the next render.
 - Fixed visited cell (teal border) highlights not updating when stepping backward in Granular Step tab. Board's internal `visitedRef` Set only grew — never shrank on backward navigation. Added optional `visitedCells?: Set<string>` prop to Board. App.tsx computes the set from `lastStepHistory[0..stepIndex]` positions so stepping backward correctly removes teal highlights from cells Bender hasn't visited yet at that step. Internal `visitedRef` tracking is skipped when the prop is provided. Full Step tab and Getting Started tab are unaffected (no prop passed, use internal tracking).
 - Fixed subtle vertical layout shift in Granular Step tab when stepping the first episode. The StepWalkthrough slider row changed height between placeholder text ("Click > to step the first episode") and the actual `<input type="range">` — placeholder could wrap at narrow widths, and bold vs normal-weight values in detail rows had slightly different line heights. Fixed by adding explicit `height: 28` on the slider row and `height: 22` on each detail row, plus `whiteSpace: nowrap` on the placeholder text. This eliminates the ~2px shift that caused QMatrixInspector to jump up.
+- Added decorative Futurama images sourced from the original C# repo on GitHub (`nelsong6/BenderWorld`). Planet Express ship (`spaceship.png`, resized from 1024×768 to 120×90) in the left sidebar below the tab bar, pushed to bottom via `marginTop: 'auto'`, 40% opacity. Fry squinting (`fry-squinting.png`, 41×57) in the header bar far right, 64px display height, aligned flush with the header's bottom border via `alignSelf: 'flex-end'` + `marginBottom: -12`, 50% opacity. Both are `pointerEvents: 'none'` decorations.
 - Made Controls bar (Play/Back/Step/+10/+100) operate at micro-step granularity when the Granular Step tab is active. Previously all controls always advanced full episodes, forcing users to use the small `< >` buttons in StepWalkthrough. Now App.tsx wraps the Controls callbacks based on `activeTab === 'granular'`: Step advances one micro-step within the episode (advancing to next episode at end), Back goes back one step (undoing the episode at step 0), +10/+100 jump N steps clamped to episode end. Play uses a `setInterval`-based auto-advance loop (`microPlaying` state + `microIntervalRef`) instead of the AnimationClock pipeline. Speed slider label dynamically shows "steps/s" vs "ep/s". Controls.tsx gained a minimal `isMicro` prop for the label; all behavioral logic lives in App.tsx. Safety effects stop micro-play on tab switch, reset, and algorithm end.
+- Replaced all green accent colors with muted sage-green (`#5a8e70`) to match the Planet Express ship hull color. Changed 7 values in `colors.ts`: `accent.green`, `accent.greenLight`, `board.currentBorder`, `chart.rewardLine/Glow/Fill`, `qValue.positive`. The previous bright acidic lime (`#5fd64d`) was visually inconsistent with the ship sprite. Teal (`#2fbfc9`) left unchanged — it serves a distinct semantic role for explored cells.
