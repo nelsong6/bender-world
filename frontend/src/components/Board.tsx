@@ -301,6 +301,7 @@ export const Board: React.FC<BoardProps> = ({ boardState }) => {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     width: '100%',
+    maxWidth: 600,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',

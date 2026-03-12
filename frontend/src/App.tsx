@@ -383,7 +383,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: 0,
   },
   granularLeftCol: {
-    flex: '0 0 auto',
+    flex: '0 0 600px',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: 12,

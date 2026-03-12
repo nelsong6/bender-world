@@ -1,109 +1,713 @@
 # bender-world
 
-Q-Learning reinforcement learning visualization. Bender learns to collect beer cans on a 10x10 grid.
-Ported from C# WinForms app, then rebooted with architecture from eight-queens project.
-Original C# code is in d:\workspace\BenderWorld-repo.
+Q-Learning reinforcement learning visualization. Bender learns to collect beer cans on a 10×10 grid.
+Ported from C# WinForms app, then rebooted with architecture from the eight-queens project.
+Original C# code is in `d:\workspace\BenderWorld-repo`.
+
+## Project Philosophy
+
+This is an **educational visualization tool**, not a production RL system. Every design decision prioritizes:
+
+1. **Transparency** — the user should be able to see exactly what the algorithm is doing at every level of granularity, from full episode overviews down to individual step-by-step Q-value updates.
+2. **Deterministic replay** — seeded PRNG makes every run reproducible. Undo/redo via lightweight snapshots lets the user rewind and replay without losing state.
+3. **Faithful C# port** — the engine layer is a bit-exact port of the original C# implementation. Enum values, perception encoding, Q-update formulas, PRNG seeds — all produce identical results to the C# version.
+4. **Architecture parity with eight-queens** — the UI layout, animation system, help system, tab structure, color palette, and component patterns are shared with the `eight-queens` genetic algorithm visualizer at `d:\repos\eight-queens`. Changes to shared patterns should be mirrored between the two projects.
+5. **No backend** — this is a frontend-only static app. All computation happens in the browser. No API, no server, no database.
+
+## Intended User Flow
+
+The primary experience (99% of users) is **Granular Step mode** — watching Bender move around the grid one step at a time. The app should funnel users toward this as quickly as possible:
+
+1. **Getting Started tab** → user reads the brief intro, clicks **"Explore with Granular Step →"**
+2. **Granular Step tab** → user clicks **Step (→)** to advance one episode at a time, then uses the step slider / arrow buttons in StepWalkthrough to watch Bender move cell by cell
+3. Along the way, the user sees the **PerceptionDisplay** update (what Bender sees), the **QMatrixInspector** update (what Bender is learning), and the **Board** animate (where Bender goes)
+
+The "Full Step" tab and high-speed playback exist for power users who want to watch convergence over thousands of episodes, but the core appeal is the step-by-step micro view where you can see the algorithm thinking. Design decisions should prioritize making this granular flow feel responsive, intuitive, and visually clear.
 
 ## Overview
 
-Frontend-only static app (Vite + React + TypeScript). No backend or API.
+Frontend-only static app (Vite + React 19 + TypeScript 5.6). No backend or API.
 Seeded PRNG enables deterministic replay and undo/redo via lightweight snapshots.
+
+## Tech Stack
+
+- **React 19.0.0** — UI framework (functional components, hooks only)
+- **TypeScript 5.6** — strict types throughout
+- **Vite 6.0** — dev server and production bundler
+- **No CSS files** — all styles are inline `React.CSSProperties` objects
+- **No external UI libraries** — no Tailwind, no component library, no state management library
+- **Canvas API** — Board and EpisodeChart rendered via `<canvas>` for performance
+- **No tests** — no test framework configured (yet)
 
 ## Q-Learning Algorithm
 
-- 10x10 grid with randomly placed beer cans (~50% density)
-- Bender perceives 5 inputs: Left, Right, Down, Up, Here (each: Wall/Can/Empty)
-- 5 possible actions: Left, Right, Down, Up, Grab
-- 3^5 = 243 possible perception states, each with 5 Q-values
-- Epsilon-greedy action selection (epsilon decays over episodes)
-- Q-update: Q(s,a) += eta * (reward + gamma * max(Q(s',a')) - Q(s,a))
-- Rewards: CanCollected (+10), HitWall (-5), CanMissing (-1), MoveSuccessful (0)
+### The Problem
 
-## Engine Layer (frontend/src/engine/)
+Bender lives on a 10×10 grid. Some cells contain beer cans (~50% density), the edges are walls. Bender can move in 4 cardinal directions or attempt to grab a can from his current cell. The goal: learn a policy that maximizes total reward over an episode.
+
+### Perception System
+
+Bender perceives 5 adjacent cells: Left, Right, Down, Up, and the cell he's standing on (Here/Current). Each sensor returns one of 3 values: Wall, Can, or Empty. This creates 3⁵ = 243 unique perception states.
+
+Perception states are encoded as base-3 numbers (0–242). The encoding order is [Left, Right, Down, Up, Current], where Left is the most significant digit. A perception key string like `"[L: Can][R: Empty][D: Wall][U: Empty][H: Can]"` maps to a numeric ID used as the Q-matrix row index.
+
+### Q-Matrix
+
+The Q-matrix is a 243×5 sparse map (perception state → 5 action values). Actions are indexed in `ALL_MOVES` order: [Left=0, Right=1, Up=2, Down=3, Grab=4].
+
+Internally stored as `Map<number, number[]>` — only states with non-zero values are stored.
+
+### Action Selection (Epsilon-Greedy)
+
+With probability ε, Bender picks a uniformly random action (exploration). Otherwise, he picks the action with the highest Q-value for his current perception (exploitation). Ties among best actions are broken randomly.
+
+### Q-Value Update Formula
+
+The Q-update matches the C# implementation exactly:
 
 ```
-prng.ts            - Mulberry32 seeded PRNG; StatefulPrng for snapshot/restore
-perception.ts      - Perception state encoding (3^5 base-3 system); getPerceptionId, getPerceptsById
-board.ts           - GameBoard class; 10x10 grid, can placement, wall detection; takes rng in constructor
-q-matrix.ts        - QMatrix class; 243x5 sparse map; selectAction(epsilon-greedy); snapshot/restore
-algorithm-runner.ts - AlgorithmRunner; wraps board+qmatrix; runs episodes; getSnapshot/restoreSnapshot
-episode-buffer.ts  - EpisodeBuffer; async lookahead buffer (setTimeout); pre-computes episodes ahead
-animation-clock.ts - AnimationClock; rAF-based fractional playhead; normal mode + sweep animations
-types.ts           - All interfaces: AlgorithmConfig, EpisodeSummary, StepResult, etc.
+finalValue = eta * ((newBestValue - oldBestValue) * gamma^(step-1) + baseReward)
+Q[state][action] = finalValue
 ```
 
-Hook: `useBufferedAlgorithm` wires everything to React state. Manages undo/redo (MAX_UNDO=50), chart refs, speed.
+This **sets** the Q-value to the computed value (not an incremental update). Only updates if `finalValue !== 0`.
 
-## Key Types
+Note: This differs from the standard textbook Q-learning update. It matches the original C# codebase.
 
-- `AlgorithmConfig` — epsilon, gamma, eta, episodeLimit, stepLimit, rewards?, seed?
+### Epsilon Decay
+
+Linear decay per episode: `epsilon -= epsilon_initial / episodeLimit`. By the final episode, epsilon reaches ~0 (fully greedy).
+
+### Rewards
+
+| Outcome | Default Reward | Description |
+|---------|---------------|-------------|
+| CanCollected | +10 | Successfully grabbed a can |
+| HitWall | −5 | Tried to move into a wall |
+| CanMissing | −1 | Tried to grab from empty cell |
+| MoveSuccessful | 0 | Normal movement |
+
+Reward values are configurable via the Config panel sliders.
+
+### Algorithm Termination
+
+The algorithm ends when `currentStep >= stepLimit AND currentEpisode >= episodeLimit`. Each episode runs up to `stepLimit` steps, then the board is reshuffled for the next episode.
+
+## Engine Layer (`frontend/src/engine/`)
+
+The engine is pure TypeScript with zero React dependencies. It can run standalone.
+
+### `types.ts` — Core Types and Constants
+
+All enums, interfaces, and constants for the Q-Learning system.
+
+**Enums:**
+- `Percept` — Wall, Can, Empty (sensor values)
+- `MoveType` — Left, Right, Down, Up, Grab (5 actions)
+- `MoveResult` — HitWall, CanCollected, CanMissing, MoveSuccessful (outcomes)
+
+**Key Interfaces:**
+- `AlgorithmConfig` — epsilon, gamma, eta, episodeLimit, stepLimit, rewards? (optional RewardConfig), seed? (optional PRNG seed)
+- `RewardConfig` — `Record<MoveResult, number>`, maps each outcome to a reward value
+- `StepResult` — benderPosition, move, moveResult, reward, episodeReward, perception, wasRandomMove, cansCollected
 - `EpisodeSummary` — episodeNumber, totalReward, cansCollected, stepsUsed, epsilonAtStart
-- `StepResult` — benderPosition, move, moveResult, reward, episodeReward, perception, wasRandomMove
-- `AlgorithmSnapshot` — qMatrixData, currentEpisode, currentEpsilon, totalReward, prngState
-- `BoardState` — board (10x10 cells with hasCan/hasBender/walls), benderPosition, perceptionKey
+- `BoardStateSnapshot` — serializable board state for replay
 
-## UI Layout (App.tsx)
+**Constants:**
+- `DEFAULT_CONFIG` — epsilon=0.2, gamma=0.9, eta=0.1, 5000 episodes, 200 steps
+- `DEFAULT_REWARD_CONFIG` — CanCollected=+10, HitWall=−5, CanMissing=−1, MoveSuccessful=0
+- `MOVE_GRID_ADJUSTMENT` — direction → [dx, dy] grid offset
+- `ALL_MOVES` — [Left, Right, Up, Down, Grab] (Q-matrix index order)
+- `MOVES_BY_ORDER` — [Left, Right, Down, Up, Grab] (perception encoding order, matches C#)
+- `MOVE_SHORT_NAMES` — L, R, D, Up, Gr (used in perception key strings)
 
-Sidebar + content layout matching eight-queens pattern.
+### `prng.ts` — Seeded Pseudo-Random Number Generator
 
-**Sticky top bar:**
-- `Header` — Title + subtitle
-- `HelpBar` — Shows `data-help` text on hover. Press `s` to pin/unpin. Glossary links open the Glossary tab.
-- `Controls` — Flat title bar strip: Play/Pause/Back/Step/+10/+100/Reset + logarithmic speed slider (1-500 ep/s)
+Deterministic randomness for reproducible algorithm runs.
 
-**Left sidebar:** Vertical `TabBar` with 5 tabs (matches eight-queens pattern):
+- `mulberry32(seed)` — Mulberry32 PRNG returning values in [0, 1). Fast, simple, sufficient for RL demo.
+- `createPrngWithState(seed)` — PRNG with observable `getState()` for snapshot/restore. Critical for undo/redo.
+- `randomInt(rng, min, max)` — generate integers in [min, max] range.
+- `generateSeed()` — create random seed from `Math.random()`.
 
-1. **Getting Started** — Welcome text, quick-start buttons, How It Works terms, Navigation guide
-2. **Config** — ConfigPanel (presets + sliders) + SettingsSummary
-3. **Full Step** — Board + StatusBar | EpisodeChart (2-column)
-4. **Granular Step** — Board | StepWalkthrough | PerceptionDisplay + QMatrixInspector (3-column, first-class citizen)
-5. **Help / Glossary** — HelpGlossary with section picker (Problem, Q-Learning, Q-Matrix, Perception, Controls, Presets)
+**Why this matters:** Saving the PRNG state at an episode boundary, then restoring it later, guarantees the board reshuffles identically and the algorithm makes the same random choices. This is how undo works without storing full episode history.
+
+### `perception.ts` — Perception State Encoding
+
+Maps 5 directional percepts to 243 unique numeric IDs using base-3 encoding.
+
+- `getPerceptionKey(perceptions)` — build string key `"[L: Wall][R: Can]..."` matching C# format
+- `getPerceptionId(key)` — map key string → numeric ID (0–242)
+- `getPerceptionKeyById(id)` — reverse mapping (ID → key string)
+- `getPerceptsById(id)` — decode ID back to 5 individual `Percept` values
+- `TOTAL_PERCEPTION_STATES = 243`
+- `getAllPerceptionKeys()` — all 243 perception key strings
+
+All 243 states are pre-computed at module load in a static IIFE, stored in `KEY_TO_ID` Map and `ALL_STATE_KEYS` array. This is an exact port of the C# `PerceptionState` static constructor.
+
+### `board.ts` — GameBoard Class (10×10 Grid)
+
+Manages board state, Bender's position, can placement, wall collisions, and perception queries.
+
+**Internal structure:**
+- 10×10 array of `BoardCell` objects, each with `hasCan: boolean`, `hasBender: boolean`, `restrictedMoves: Set<MoveType>`
+- Walls at borders: x=0 restricts Left, x=9 restricts Right, y=0 restricts Down, y=9 restricts Up. Corners restrict two directions.
+- Bender position tracked as `[benderX, benderY]`
+- Cached current perception (key + ID) updated after each action
+
+**Key methods:**
+- `shuffleCansAndBender()` — randomize cans (~50% density) and Bender position for each new episode
+- `getPercept(move)` — query what Bender perceives in a direction (Wall if restricted, else check adjacent cell)
+- `applyMove(move)` — execute move, return `MoveResult`. Grab checks current cell for can. Movement checks wall restrictions.
+- `getBoardState()` — return full 10×10 snapshot as `BoardCellState[][]` for UI rendering
+- `static clone(source)` — deep copy for snapshots
+
+**Coordinate system (matches C#):** x = column (Left=x−1, Right=x+1), y = row (Down=y−1, Up=y+1).
+
+### `q-matrix.ts` — Q-Learning Value Storage
+
+Sparse Q-value storage with epsilon-greedy action selection.
+
+**Key methods:**
+- `getValues(stateId)` — get 5 action values for a state (lazy-init to zeros)
+- `getBestValue(stateId)` — max Q-value across actions (0 if state unseen)
+- `selectAction(stateId, epsilon, rng)` — epsilon-greedy with random tie-breaking
+- `update(stateToUpdate, resultState, actionIndex, baseReward, gamma, eta, stepNumber)` — Q-value update (exact C# formula)
+- `snapshot()` / `restore()` — deep copy for undo/redo
+- `toJSON()` / `fromJSON()` — serialization
+- `getEntryCount()` — count states with non-zero values
+
+### `algorithm-runner.ts` — Main Q-Learning Orchestrator
+
+Wraps board + Q-matrix + PRNG. Runs episodes and steps. Provides snapshots for undo/redo.
+
+**Key methods:**
+- `runStep()` — execute one step: perceive → select action → apply move → get reward → update Q-matrix → return `StepResult`
+- `runEpisode()` — run full episode (up to stepLimit steps), return `EpisodeSummary`
+- `startNewEpisode()` — shuffle board, reset counters, decay epsilon
+- `getSnapshot()` / `restoreSnapshot()` — save/restore algorithm state (Q-matrix + PRNG + counters)
+- `getCurrentState()` — return current board state for visualization
+- `reset(config?)` — reset to initial state
+
+**Design decision:** Does NOT store full step history (unlike C# version). Step history is optionally captured by the `EpisodeBuffer` when the granular tab is active.
+
+### `episode-buffer.ts` — Async Episode Pre-computation Buffer
+
+Decouples episode computation from animation playback. Pre-computes episodes ahead of the playhead so playback never stutters.
+
+**Architecture:**
+- Rolling buffer of `EpisodeBufferEntry` objects (each: `EpisodeSummary` + optional `WalkthroughStep[]`)
+- Producer loop runs via `setTimeout(0)` to avoid blocking the main thread
+- Configurable batch size scales with playback speed
+
+**Key concept:** The animation clock consumes episodes from the buffer at the playhead rate. The producer fills the buffer in the background. At high speeds, batch size increases so the buffer stays ahead.
+
+**Key methods:**
+- `startProducing()` / `stopProducing()` — control background loop
+- `setBatchSize(size)` — episodes computed per setTimeout tick (1–50)
+- `available` — count of episodes ready for consumption
+- `consume()` — pop next episode (called when animation crosses an integer boundary)
+- `peek(offset)` — look ahead without consuming (for chart interpolation)
+- `computeImmediate(count)` — synchronous batch computation (for manual step-N)
+- `computeOne()` — single episode with optional step history (for manual step)
+- `captureSteps` flag — when true, each step's full state is recorded as `WalkthroughStep` (board snapshot + step result). Only enabled when the granular tab is active because it's expensive.
+
+**`WalkthroughStep` interface:**
+```ts
+{ step: StepResult; boardSnapshot: { board, benderPosition, perceptionKey } }
+```
+
+### `animation-clock.ts` — requestAnimationFrame Playhead Driver
+
+Drives a fractional playhead via `requestAnimationFrame`. The playhead represents the current position in episode-space (e.g., 42.7 = between episode 42 and 43).
+
+**Two modes:**
+1. **Normal playback** — advance at constant rate based on speed setting
+2. **Sweep mode** — animated interpolation to a target position (used for step/stepN visual feedback)
+
+**Key methods:**
+- `setSpeed(uiSpeed)` — convert UI speed (1–500) to internal `episodesPerMs`. Formula: `delayMs = 501 - uiSpeed`, `episodesPerMs = 1 / delayMs`
+- `start()` / `stop()` — control rAF loop
+- `startSweep(target, duration, easing)` — animate playhead to target (ease-out or ease-in-out)
+- `finishSweepImmediate()` — jump to sweep target instantly
+- `stopAtNextBoundary()` — pause after next integer crossing (clean pause)
+- `setPlayhead(value)` — set playhead directly (for undo/redo)
+- `reset()` — stop and reset to -1
+
+**Callbacks:**
+- `onTick(playhead, dt)` — every rAF frame (chart reads playhead for smooth interpolation)
+- `onBoundary(episodeIndex)` — when playhead crosses an integer (consume episode from buffer)
+- `onSweepComplete()` — when sweep animation finishes
+
+## State Management (`frontend/src/hooks/`)
+
+### `use-buffered-algorithm.ts` — Central Orchestration Hook
+
+Wires the engine layer (AlgorithmRunner + EpisodeBuffer + AnimationClock) to React state. This is the single source of truth for the entire app.
+
+**Refs (high-frequency, no re-renders):**
+- `bufferRef` — EpisodeBuffer instance
+- `clockRef` — AnimationClock instance
+- `undoStackRef` — `HistorySnapshot[]` (max 50)
+- `redoStackRef` — `EpisodeBufferEntry[]`
+- `allSummariesRef` — `EpisodeSummary[]` (chart data, read by rAF loop)
+- `chartPlayheadRef` — current fractional playhead (read by chart canvas)
+- `lookaheadSummaryRef` — next episode summary for chart tip interpolation
+
+**React state (synced on episode boundaries):**
+- `running`, `speed`, `currentEpisode`, `currentStep`
+- `episodeReward`, `totalReward`, `cansCollected`, `cansRemaining`, `epsilon`
+- `boardState` (10×10 grid for Board component)
+- `episodeSummaries` (for any component that needs full history)
+- `algorithmEnded`, `algorithmConfig`, `qMatrix`, `currentPerceptionId`
+- `canGoBack`, `lastStepHistory` (WalkthroughStep[] for granular tab)
+
+**Actions:**
+- `start(config)` — initialize new training run (creates buffer + clock, resets stacks)
+- `resume()` — start playback. Prefills buffer from redo stack if available. Sets up `onBoundary` callback to consume episodes and push undo snapshots.
+- `pause()` — stop playback (pause at next boundary for clean stop)
+- `step()` — single episode advance. Pushes undo snapshot, consumes from redo stack or computes new. Triggers sweep animation for chart visual feedback.
+- `stepN(count)` — batch advance. Synchronous computation, sweep animation to final position.
+- `goBack()` — pop undo stack, restore algorithm state (Q-matrix + PRNG + counters), trim summaries, snap playhead. Pushes consumed entry to redo stack.
+- `reset()` — clear everything, return to initial state
+- `setSpeed(speed)` — update clock speed and buffer batch size
+- `setCaptureSteps(enabled)` — toggle step-by-step capture on the buffer
+
+**Undo/Redo Architecture:**
+- Each undo snapshot is lightweight (~10KB): `AlgorithmSnapshot` (Q-matrix sparse map + PRNG state + episode counters) + `summariesLength` (index into summaries array)
+- Max 50 undo slots (FIFO eviction when full)
+- Redo stack stores consumed `EpisodeBufferEntry` objects. On `resume()`, redo entries are prefilled into the buffer so they replay in order.
+
+**Performance pattern:** The rAF loop reads from refs (`chartPlayheadRef`, `allSummariesRef`, `lookaheadSummaryRef`) without triggering React re-renders. React state is only synced when the playhead crosses an episode boundary (integer crossing), which happens at most once per `1000/speed` milliseconds.
+
+## UI Components (`frontend/src/components/`)
+
+### App.tsx — Root Layout & Orchestration
+
+The main layout follows the eight-queens sidebar+content pattern:
+
+```
+┌─────────────────────────────────────────────────┐
+│ Header: "BenderWorld: Reinforcement Learning"   │  sticky top
+├─────────────────────────────────────────────────┤
+│ HelpBar: hover help text, S to pin/unpin        │  sticky top
+├─────────────────────────────────────────────────┤
+│ Controls: Play/Pause/Back/Step/+10/+100/Reset   │  sticky top (only when started)
+│           + logarithmic speed slider (1-500)     │
+├─────┬───────────────────────────────────────────┤
+│ Tab │  Content Area (changes per active tab)    │
+│ Bar │                                           │
+│     │  getting-started: GettingStartedTab       │  flex: 1
+│ (v  │  config: ConfigPanel + SettingsSummary    │  minHeight: 0
+│  e  │  full: Board+StatusBar | EpisodeChart     │  overflowY: auto
+│  r  │  granular: Board | StepWalkthrough |      │
+│  t  │           Perception + QMatrix            │
+│  i  │  glossary: [section picker] + content     │
+│  c  │                                           │
+│  a  │                                           │
+│  l  │                                           │
+│  )  │                                           │
+└─────┴───────────────────────────────────────────┘
+```
+
+**Sticky top section** (`flexShrink: 0`, `zIndex: 160`):
+- Header with title + subtitle
+- HelpBar (always visible)
+- Controls bar (only when `hasStarted` — i.e., after config is submitted)
+
+**Main section** (`flex: 1`, `flexDirection: row`, `minHeight: 0`):
+- Left sidebar: vertical `TabBar`
+- Optional secondary sidebar: glossary section picker (only on glossary tab)
+- Tab content area: `flex: 1`, scrolls independently
+
+**Quick-start callbacks:** The Getting Started tab has buttons that auto-start with `DEFAULT_CONFIG` and switch to the appropriate tab.
+
+### TabBar.tsx — Vertical Sidebar Tab Navigation
+
+5 tabs matching the eight-queens pattern:
+
+| Tab ID | Label | Content |
+|--------|-------|---------|
+| `getting-started` | Getting Started | Welcome, quick-start buttons, how-it-works terms |
+| `config` | Config | Preset buttons, parameter sliders, settings summary |
+| `full` | Full Step | Board + StatusBar alongside EpisodeChart (2 columns) |
+| `granular` | Granular Step | Board alongside StepWalkthrough + PerceptionDisplay + QMatrixInspector |
+| `glossary` | Help / Glossary | Secondary section picker sidebar + glossary content |
+
+**Styling pattern (shared with eight-queens):**
+- Inactive tabs: `padding: '1px 0 1px 1px'` reserves space for border
+- Active tab: `borderLeft/Top/Bottom` with `borderRight: 'none'`, `marginRight: -1` to overlap content area border, `zIndex: 1` to stack above inactive tabs
+- Font: monospace, 12px, `letterSpacing: 0.3`
+- Color: `colors.text.primary` when active, `colors.text.tertiary` when inactive
+- Weight: bold when active
+
+### GettingStartedTab.tsx — Introduction & Quick Start
+
+Two-column layout (text left, board preview right):
+
+**Left column sections:**
+1. **CTA box** — "Watch Bender Learn →" + "Full Run (advanced) →"
+2. **Title + intro**
+3. **Using the Help Bar** — hover for help, press S to pin/unpin, glossary links
+4. **How It Works** — brief glossary terms: Grid, Beer Can, Wall, Episode, Q-Value, Epsilon
+5. **Reference** — link to "Browse Help & Glossary →"
+
+**Right column:**
+- Static `<Board boardState={null} />` (renders empty grid)
+- Caption: "Bender's 10×10 Grid"
+- Hint text about perception and Q-matrix size
+
+**Styles:** Copied from eight-queens `GettingStartedTab.tsx`, same color palette.
+
+### HelpBar.tsx — Contextual Help Display
+
+A 28px-tall bar below the header that shows help text for whatever UI element the user is hovering over.
+
+**How it works:**
+- Document-level `mouseover` listener checks for `[data-help]` attribute on hovered element (or ancestor via `closest()`)
+- If found, displays that element's `data-help` value. If not, shows default text: "Hover over any control to see what it does. Press S to pin help text."
+- Press `S` key to pin/hold the current help text (shows "HELD" badge in gold)
+- While pinned, if the element has `[data-help-glossary]`, a "See in Glossary →" button appears
+- Press `S` again to unpin; help text resumes following the mouse
+- Mouse position tracked via `mousemove` so unpinning recalculates from current position
+
+**Adding help to any element:** Add `data-help="Description text"` attribute. Optionally add `data-help-glossary="term-id"` to link to a glossary entry.
+
+### HelpGlossary.tsx — Educational Content & Glossary
+
+Renders glossary content for the selected section. Used with a secondary sidebar section picker.
+
+**6 sections** (`HelpSectionId`):
+| ID | Label | Content |
+|----|-------|---------|
+| `problem` | The Problem | Grid, beer cans, walls, episodes, steps |
+| `algorithm` | Q-Learning | Q-values, epsilon, gamma, eta, rewards, convergence |
+| `qmatrix` | Q-Matrix | States (perceptions), actions, greedy vs random |
+| `perception` | Perception | 5 sensors, sensor values, perception keys, base-3 encoding |
+| `controls` | Controls | Playback shortcuts, tab descriptions, hold help |
+| `presets` | Presets | Description of each preset configuration |
+
+**`<Term>` helper component:** Renders key-value pairs with purple key text and secondary-color value text.
+
+**Section picker:** When the glossary tab is active, App.tsx renders a secondary vertical sidebar (`opTabStrip` style) with buttons for each section. This mirrors the eight-queens operation tab strip.
+
+### ConfigPanel.tsx — Configuration Sliders & Presets
+
+**Preset buttons:** Default, Fast Learner, Cautious, Explorer. Clicking applies all parameters at once.
+
+**Parameter sliders (SliderParam sub-component):**
+- Epsilon (ε): 0–1, step 0.01
+- Gamma (γ): 0–1, step 0.01
+- Eta (η): 0–1, step 0.01
+- Episode Limit: 100–100,000, step 100
+- Step Limit: 50–500, step 10
+
+**Reward sliders:**
+- Can Collected: −20 to +50
+- Hit Wall: −50 to 0
+- Can Missing: −20 to 0
+- Move OK: −10 to +10
+
+**Start Training button:** Calls `onStart(config)` with current slider values. Disabled while running.
+
+**Note:** This component still uses legacy inline hex colors (e.g., `'#1e1e2e'`, `'#888'`) instead of the centralized `colors.ts` palette. Future cleanup should migrate these.
+
+### Controls.tsx — Playback Control Bar
+
+Flat horizontal bar in the sticky top section (only visible after training starts).
+
+**Buttons:**
+| Button | Shortcut | Action | Color |
+|--------|----------|--------|-------|
+| Play/Pause | Space | Toggle playback | Green |
+| Back | Left arrow | Undo last episode | Purple |
+| Step | Right arrow | Advance 1 episode | Blue |
+| +10 | Shift+Right | Advance 10 episodes | Blue |
+| +100 | — | Advance 100 episodes | Dark blue |
+| Reset | — | Return to config screen | Red |
+
+**Speed slider:** Logarithmic scale from 1 to 500 episodes/second. Display shows current speed in "ep/s".
+
+**Keyboard shortcuts** (registered via `useEffect` + `keydown` listener):
+- Space: Play/Pause (only when algorithm is active and not ended)
+- Right arrow: Step once (only when paused)
+- Shift+Right: Step 10 (only when paused)
+- Left arrow: Back/undo (only when paused and undo available)
+- All shortcuts ignore input when focus is on `<input>`, `<select>`, or `<textarea>`
+
+**"Complete" badge:** Green badge appears when `algorithmEnded` is true.
+
+### Board.tsx — Canvas-Rendered 10×10 Grid
+
+Renders the game board using HTML5 Canvas with sprite overlays.
+
+**Rendering pipeline:**
+1. Column labels (1–10) across top
+2. Row labels (1–10) down left side
+3. 10×10 grid of cells:
+   - Fill color based on state (unexplored=gray, explored=blue border, current=green border)
+   - Border drawn around each cell
+   - Wall indicators (darker stroked lines on restricted cell edges)
+4. Sprites drawn on top:
+   - `bender.png` — Bender character
+   - `beer.png` — beer can
+   - `bender-and-beer.png` — when Bender is on a can cell
+5. Grid lines (subtle overlay)
+
+**Sprite loading:** Async image loading with fallback to text indicators ("B" for Bender, "C" for can) while sprites load. Sprites loaded once and cached.
+
+**Responsive sizing:** `ResizeObserver` watches container width (max 600px canvas). HiDPI support via `devicePixelRatio` scaling (canvas internal resolution vs CSS display size).
+
+**Visited tracking:** Board tracks which cells Bender has visited (explored border color vs unexplored).
+
+**Null state:** When `boardState={null}`, renders empty grid (used in Getting Started tab preview).
+
+### StatusBar.tsx — Real-time Statistics Display
+
+Horizontal flex row of colored badges showing current algorithm state:
+
+| Stat | Color | Format |
+|------|-------|--------|
+| Episode | Green | current / limit |
+| Step | Blue | current / limit |
+| Episode Reward | Green (≥0) / Red (<0) | signed number |
+| Total Reward | Green (≥0) / Red (<0) | signed number |
+| Cans | Gold | count |
+| Cans Left | Gold | count |
+| Epsilon (ε) | Orange | decimal |
+| Gamma (γ) | Purple | decimal |
+
+### EpisodeChart.tsx — Canvas Chart with Gradient Fills & Tooltips
+
+Visualizes episode rewards over time using a persistent rAF draw loop.
+
+**Features:**
+- **Reward line** (green) with glow effect + gradient fill below
+- **Moving average line** (orange, ~5% window) with glow + fill
+- **Dynamic Y-axis scaling** with smooth animated transitions
+- **Grid lines** with logarithmic step sizing
+- **Tooltip** on hover: Episode number, Reward, Cans collected, Steps used
+- **Vertical crosshair** at hover position
+- **Legend** (top-right corner)
+- **X-axis labels** with fade-out near edges
+- **Interpolated tip** — playhead fraction used to interpolate between last consumed episode and lookahead for smooth animation
+
+**Performance:** The chart reads directly from refs (`summariesRef`, `playheadRef`, `lookaheadRef`) in its own rAF loop. No React re-renders needed — the chart animates independently of React state updates.
+
+**HiDPI:** Canvas resolution scaled by `devicePixelRatio`; CSS size stays responsive.
+
+### PerceptionDisplay.tsx — Compass Rose Sensor Display
+
+3×3 CSS grid showing Bender's current 5-cell perception:
+
+```
+     [North]
+[West] [HERE] [East]
+     [South]
+```
+
+Each cell is color-coded:
+- **Red** — Wall
+- **Gold** — Can
+- **Gray** — Empty
+
+Center cell (Current/Here) has a green border. Shows Bender's grid coordinates (1-indexed) and the full perception key string.
+
+Parses the perception key string via regex to extract individual percept values.
+
+### QMatrixInspector.tsx — Interactive Q-Value Table Viewer
+
+Two-part Q-value explorer:
+
+**State selector (top):**
+- Dropdown with all 243 perception states
+- 5 individual percept dropdowns (Left, Right, Down, Up, Current) for targeted lookup
+- Auto-syncs to current perception when algorithm runs
+
+**Detail row (middle):**
+- Shows 5 action Q-values for the selected state
+- Highlights best action (boldface, light green background)
+- Color-codes values: green (positive), red (negative), gray (zero)
+
+**Full table (bottom, scrollable):**
+- All populated states with their 5 Q-values
+- Sticky header row
+- Current perception highlighted in green
+- Selected state highlighted in blue
+- Best action highlighted per row
+- Entry count shown in title
+
+### SettingsSummary.tsx — Active Configuration Display
+
+Two-column key-value display of the active algorithm configuration. Shows:
+- Episodes, Steps/Episode, Epsilon (initial), Gamma, Eta
+- Reward values for each outcome (CanCollected, HitWall, CanMissing, MoveOK)
+
+Only renders when `algorithmConfig` is not null (i.e., after training starts).
+
+### StepWalkthrough.tsx — Step-by-Step Episode Replay
+
+Used in the Granular Step tab. Shows individual step details within an episode.
+
+**Controls:**
+- Episode navigation: "« Prev Episode" / "Next Episode »" buttons
+- Step navigation: slider + left/right buttons
+- Step counter: "step X / Y"
+
+**Step details panel (when step data available):**
+- Position (1-indexed grid coordinates)
+- Move (Left/Right/Down/Up/Grab)
+- Strategy (Random vs Greedy, color-coded)
+- Result (HitWall/CanCollected/CanMissing/MoveSuccessful, color-coded)
+- Reward (signed, color-coded)
+- Episode Reward (running total)
+- Cans Collected
+- Perception key string
+
+**Behavior:** When stepping past the end of an episode, clicking ">" triggers `onNextEpisode` (advances to the next episode). When no step data exists, shows "Click > to step the first episode".
+
+## Color Palette (`frontend/src/colors.ts`)
+
+Centralized color constants used throughout the app. All components should import from here (some legacy components still have inline hex — to be migrated).
+
+```
+bg.base      = #0d0d1a   (deepest background)
+bg.raised    = #14142b   (panels, bars, headers)
+bg.surface   = #1c1c3a   (input fields, cards, section bodies)
+bg.overlay   = #252550   (hover states, kbd backgrounds)
+
+border.subtle = #2a2a4e
+border.strong = #3a3a5e
+
+text.primary   = #e2e2ef  (headings, active labels)
+text.secondary = #a0a0be  (body text, descriptions)
+text.tertiary  = #6e6e8a  (hints, inactive tabs)
+text.disabled  = #4a4a64
+
+accent.green      = #4caf50   (play button, positive values, reward line)
+accent.greenLight = #66bb6a
+accent.gold       = #ffd700   (cans, held badge)
+accent.blue       = #6bb8f0   (step buttons, greedy strategy)
+accent.orange     = #ff9800   (moving average, random strategy, epsilon)
+accent.red        = #f44336   (walls, negative values, reset)
+accent.teal       = #30c8b0
+accent.purple     = #7c6cf0   (primary CTA, glossary links, back button, tab accents)
+```
+
+Additional domain-specific palettes: `board.*`, `chart.*`, `perception.*`, `qValue.*`, `interactive.*`.
+
+## Data (`frontend/src/data/`)
+
+### `presets.ts` — Algorithm Configuration Presets
+
+| ID | Name | ε | γ | η | Episodes | Steps | Philosophy |
+|----|------|---|---|---|----------|-------|------------|
+| `default` | Default | 0.2 | 0.9 | 0.1 | 5000 | 200 | Balanced baseline |
+| `fast-learner` | Fast Learner | 0.3 | 0.9 | 0.3 | 3000 | 200 | High learning rate + exploration, fewer episodes |
+| `cautious` | Cautious | 0.1 | 0.95 | 0.05 | 10000 | 200 | Low exploration, high discount, slow steady learning |
+| `explorer` | Explorer | 0.5 | 0.8 | 0.2 | 5000 | 300 | Very high exploration, more steps per episode |
+
+Each preset has `id`, `name`, `description`, and `config` (partial `AlgorithmConfig`).
 
 ## Animation Architecture
 
-Same pattern as eight-queens:
+Same pattern as eight-queens. Three layers work together:
 
-1. **EpisodeBuffer** pre-computes episodes via setTimeout(0) producer loop
-2. **AnimationClock** drives rAF fractional playhead; `floor(playhead)` = episode index
-3. **EpisodeChart** reads from refs (summariesRef, playheadRef, lookaheadRef) — no React re-render needed
-4. Chart interpolates tip between last consumed episode and lookahead for smooth animation
-5. Sweep mode: step/stepN triggers an eased animation to the target playhead position
+### Layer 1: EpisodeBuffer (Producer)
+
+Pre-computes episodes via `setTimeout(0)` producer loop. Batch size scales with speed (at speed 500, computes ~5 episodes per tick). The buffer stays ahead of the playhead so playback never stutters.
+
+### Layer 2: AnimationClock (Driver)
+
+rAF-based fractional playhead. In normal mode, advances at constant rate. `floor(playhead)` gives the current episode index. When the playhead crosses an integer boundary, the `onBoundary` callback fires.
+
+### Layer 3: useBufferedAlgorithm (Consumer)
+
+On boundary: consumes one episode from the buffer, appends to summaries, syncs React state, pushes undo snapshot.
+
+On tick: updates `chartPlayheadRef` for smooth chart animation (no React re-render).
+
+### Sweep Mode
+
+When the user clicks Step or Step-N, the clock enters sweep mode: it animates the playhead from current position to the target over a duration (300ms for single step, 400–800ms for step-N). This creates smooth chart scrolling instead of jarring jumps. The `onSweepComplete` callback finalizes the episode summaries after the animation.
 
 ## Undo/Redo
 
-Lightweight snapshots (~10KB each): Q-matrix sparse map + PRNG state + episode count.
-Max 50 undo slots. Back button pops undo stack, pushes to redo. Redo entries are consumed on play/step.
+### How It Works
+
+1. **Before each step/resume:** Push a `HistorySnapshot` onto the undo stack
+2. **HistorySnapshot contains:** `AlgorithmSnapshot` (Q-matrix sparse data + PRNG state + episode counters) + `summariesLength`
+3. **On goBack:** Pop undo stack, restore algorithm state, trim summaries to saved length, snap chart playhead
+4. **Redo stack:** The consumed episode entry is pushed to the redo stack. On resume/play, redo entries are prefilled into the buffer so they replay in order.
+5. **Max 50 undo slots** — oldest entries evicted when full
+
+### Why Snapshots Are Small (~10KB)
+
+- Q-matrix is sparse: only non-zero entries stored (at most 243 states × 5 values)
+- PRNG state is a single 32-bit integer
+- Episode counters are a few numbers
+- No full board state or step history stored — board state is reconstructed from PRNG seed on restore
 
 ## Keyboard Shortcuts
 
-- Space: Play/Pause
-- Right arrow: Step one episode
-- Shift+Right: Step 10 episodes
-- Left arrow: Back (undo)
+| Key | Action | Context |
+|-----|--------|---------|
+| Space | Play / Pause | Only when algorithm started and not ended |
+| → | Step one episode | Only when paused |
+| Shift+→ | Step 10 episodes | Only when paused |
+| ← | Back (undo) | Only when paused and undo available |
+| S | Pin/unpin help text | Always (except when typing in inputs) |
 
-## Presets (frontend/src/data/presets.ts)
+## Sprites (`frontend/public/sprites/`)
 
-| id | name | epsilon | gamma | eta | episodes | steps |
-|----|------|---------|-------|-----|----------|-------|
-| default | Default | 0.2 | 0.9 | 0.1 | 5000 | 200 |
-| fast-learner | Fast Learner | 0.3 | 0.9 | 0.3 | 3000 | 200 |
-| cautious | Cautious | 0.1 | 0.95 | 0.05 | 10000 | 200 |
-| explorer | Explorer | 0.5 | 0.8 | 0.2 | 5000 | 300 |
+PNG sprites for board rendering:
+- `bender.png` — Bender character (rendered on Bender's current cell)
+- `beer.png` — beer can (rendered on cells with cans)
+- `bender-and-beer.png` — combined sprite (when Bender stands on a can)
 
-## UI Patterns
+Board.tsx loads these asynchronously via `new Image()`. While loading, falls back to text indicators ("B" for Bender, "C" for can).
 
-- **Colors**: Centralized palette in `frontend/src/colors.ts` (new components use it; legacy components have inline hex)
-- **All styles**: inline `React.CSSProperties` objects — no CSS files, no Tailwind
-- **Chart**: Canvas-based with gradient fills, glow effects, HiDPI support, hover tooltips
-- **Help text**: Elements use `data-help` attributes. HelpBar displays text on hover; press `s` to pin/unpin. `data-help-glossary` links to glossary terms.
-- **TabBar**: Vertical sidebar tabs with active-tab border treatment (borderLeft/Top/Bottom, no borderRight, marginRight: -1)
+## UI Patterns & Conventions
 
-## Sprites
+### Styling
 
-PNG sprites in `frontend/public/sprites/`: bender.png, beer.png, bender-and-beer.png.
-Board.tsx loads them asynchronously; falls back to text "B"/"C" while loading.
+- **All styles:** inline `React.CSSProperties` objects defined as `const styles: Record<string, React.CSSProperties>` at the bottom of each component file
+- **No CSS files, no Tailwind, no styled-components**
+- **Colors:** import from `frontend/src/colors.ts` — never use raw hex in new components
+- **Font:** `'Segoe UI', 'Roboto', monospace` for the app shell, pure `monospace` for component text
+- **Font sizes:** 10–14px range for most UI text, 20px for page titles
 
-## Infra (tofu/)
+### Help System
+
+- Add `data-help="Description"` to any element that should show help on hover
+- Add `data-help-glossary="term-id"` to link to a glossary term (shows "See in Glossary →" when pinned)
+- HelpBar automatically picks up these attributes via document-level event listeners
+
+### Tab Border Technique
+
+Active tabs use `borderLeft/Top/Bottom` with `borderRight: 'none'` and `marginRight: -1` to visually "open" into the content area. Inactive tabs use `padding` instead of border to reserve the same space without visible lines. `zIndex: 1` ensures the active tab renders above neighbors. `marginBottom: -1` creates seamless stacking.
+
+### Canvas Rendering Pattern
+
+Board and EpisodeChart use Canvas for performance:
+1. Canvas element with refs
+2. HiDPI: set `canvas.width = cssWidth * devicePixelRatio`, scale context by `devicePixelRatio`
+3. ResizeObserver for responsive sizing
+4. For chart: own rAF loop reading from refs (no React dependency)
+5. For board: re-render on state change via `useEffect`
+
+### Flex Layout Pattern
+
+Used throughout for scrollable nested flex columns:
+```css
+display: flex;
+flex-direction: column;
+flex: 1;
+min-height: 0;    /* CRITICAL — allows flex children to shrink below content size */
+overflow-y: auto;  /* on the content that should scroll */
+```
+
+## Infrastructure (`tofu/`)
 
 OpenTofu (Terraform) in `tofu/`. Manages:
 - `azurerm_resource_group` (bender-world-rg)
@@ -116,7 +720,7 @@ Shared infra vars (`infra_resource_group_name`, `infra_dns_zone_name`) injected 
 
 In infra-bootstrap: `bender-world` is `has_backend = false` (frontend-only, no Container App/Cosmos/AppConfig).
 
-## CI/CD (.github/workflows/)
+## CI/CD (`.github/workflows/`)
 
 - `deploy.yml` — Phase 3 CD; triggered by push to main, `spacelift_infra_ready` dispatch, or manual. Builds Vite, fetches SWA deployment token via Spacelift outputs + Azure OIDC, deploys to Azure Static Web App.
 - `lint.yml` — linting via shared template
@@ -128,7 +732,68 @@ In infra-bootstrap: `bender-world` is `has_backend = false` (frontend-only, no C
 ```bash
 cd frontend
 npm install
-npm run dev     # Vite dev server
-npm run build   # Production build
+npm run dev     # Vite dev server (port 5173)
+npm run build   # Production build (output: dist/)
 npx tsc --noEmit  # Type check
 ```
+
+## File Manifest
+
+### Engine (`frontend/src/engine/`)
+```
+types.ts             - Enums, interfaces, constants (Percept, MoveType, MoveResult, AlgorithmConfig, etc.)
+prng.ts              - Mulberry32 seeded PRNG; StatefulPrng for snapshot/restore
+perception.ts        - 3^5 base-3 perception state encoding; getPerceptionId, getPerceptsById
+board.ts             - GameBoard class; 10×10 grid, can placement, wall detection, move execution
+q-matrix.ts          - QMatrix class; 243×5 sparse map; epsilon-greedy selection; snapshot/restore
+algorithm-runner.ts  - AlgorithmRunner; wraps board+qmatrix+prng; runs episodes/steps; snapshots
+episode-buffer.ts    - EpisodeBuffer; async producer loop (setTimeout); WalkthroughStep capture
+animation-clock.ts   - AnimationClock; rAF playhead; normal + sweep modes; boundary callbacks
+```
+
+### Components (`frontend/src/components/`)
+```
+App.tsx              - Root layout (sticky top + sidebar + content); tab orchestration
+TabBar.tsx           - 5-tab vertical sidebar navigation
+GettingStartedTab.tsx - Welcome page with quick-start buttons and board preview
+HelpBar.tsx          - Contextual help display (data-help hover + S pin)
+HelpGlossary.tsx     - 6-section glossary (Problem, Q-Learning, Q-Matrix, Perception, Controls, Presets)
+ConfigPanel.tsx      - Preset buttons + parameter sliders + reward sliders + Start button
+Controls.tsx         - Playback bar: Play/Pause/Back/Step/+10/+100/Reset + speed slider
+Board.tsx            - Canvas-rendered 10×10 grid with sprites
+StatusBar.tsx        - Real-time stats badges (episode, step, reward, epsilon, etc.)
+EpisodeChart.tsx     - Canvas reward chart with gradients, moving average, tooltips
+PerceptionDisplay.tsx - 3×3 compass rose showing 5-cell perception
+QMatrixInspector.tsx - Q-value table viewer with state selector and full table
+SettingsSummary.tsx  - Active configuration key-value display
+StepWalkthrough.tsx  - Step-by-step episode replay with episode/step navigation
+```
+
+### Hooks & Data
+```
+hooks/use-buffered-algorithm.ts  - Central state hook (engine + buffer + clock + undo/redo)
+data/presets.ts                  - 4 algorithm presets (Default, Fast Learner, Cautious, Explorer)
+colors.ts                        - Centralized color palette
+main.tsx                         - React entry point (StrictMode + createRoot)
+```
+
+### Config & Static
+```
+index.html           - HTML template (root div + module script)
+vite.config.ts       - Vite config (React plugin, port 5173)
+public/sprites/      - bender.png, beer.png, bender-and-beer.png
+```
+
+## Change Log
+
+Reverse-chronological record of significant changes, decisions, and context that isn't obvious from the code or git history alone. Prune entries that become stale or are fully captured by the code itself.
+
+### 2026-03-11
+- Restructured App.tsx to match eight-queens sidebar+content layout. Previous attempt (~50 conversations worth of incremental changes) had partially updated TabBar/Controls/StepWalkthrough/HelpBar/HelpGlossary to use new tab IDs and vertical sidebar styling, but left App.tsx on old tab IDs (`overview`/`inspect`/`walkthrough`) and old two-column layout — app was completely broken because TabBar exported new IDs that App.tsx didn't reference.
+- Created GettingStartedTab.tsx adapted from eight-queens: two-column layout with welcome text, help bar guide, quick-start buttons, how-it-works terms, and a static board preview. Quick-start buttons auto-start with DEFAULT_CONFIG and navigate to the correct tab.
+- Wired HelpBar and HelpGlossary into App.tsx. Glossary tab gets a secondary vertical sidebar (opTabStrip pattern) for section picking.
+- Full Step tab: Board+StatusBar | EpisodeChart (2-column flex). Granular Step tab: Board | StepWalkthrough+PerceptionDisplay+QMatrixInspector (2-column, right side scrolls).
+- Fixed StepWalkthrough props (was passing `stepHistory={null}` and missing `onNextEpisode`/`onPrevEpisode`/`canGoBack`/`algorithmEnded`).
+- Rewrote CLAUDE.md with comprehensive documentation of every feature, component, engine module, and pattern.
+- Added this Change Log section — going forward, every session should append a dated entry summarizing what changed, why, what was tried/rejected, and any open threads.
+- Fixed board "slow expand" on tab switch to Granular Step. The `granularLeftCol` used `flex: '0 0 auto'`, letting flexbox negotiate width over multiple frames — Board's ResizeObserver fired on each intermediate size, causing the canvas to visually grow. Fixed by locking the column to `flex: '0 0 600px'` and adding `maxWidth: 600` to Board's container style.

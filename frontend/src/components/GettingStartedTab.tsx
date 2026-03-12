@@ -18,10 +18,27 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
       <div style={styles.inner}>
         <div style={styles.twoCol}>
           <div style={styles.leftCol}>
+            {/* Primary CTA at the very top — this is the first thing users see.
+                The granular step flow is the core experience (see Intended User Flow). */}
+            <div style={styles.ctaBox}>
+              <div style={styles.buttonRow}>
+                <button style={styles.primaryBtn} onClick={onStartGranular}>
+                  Watch Bender Learn →
+                </button>
+                <button style={styles.secondaryBtn} onClick={onStartFull}>
+                  Full Run (advanced) →
+                </button>
+              </div>
+              <p style={styles.ctaHint}>
+                Step through each action one by one — see what Bender perceives, which action he picks,
+                and how Q-values update in real time.
+              </p>
+            </div>
+
             <h2 style={styles.pageTitle}>Getting Started</h2>
             <p style={styles.intro}>
               BenderWorld is a Q-Learning reinforcement learning visualizer. Watch Bender learn to
-              collect beer cans on a 10×10 grid — or step through each episode to see exactly how
+              collect beer cans on a 10×10 grid — step through each move to see exactly how
               Q-values evolve.
             </p>
 
@@ -40,28 +57,6 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
                 </p>
                 <p style={{ ...styles.para, margin: 0 }}>
                   Press <kbd style={styles.kbd}>s</kbd> again to unpin and resume following the mouse.
-                </p>
-              </div>
-            </div>
-
-            <div style={styles.section}>
-              <div style={styles.sectionHeader}>Quick Start</div>
-              <div style={styles.sectionBody}>
-                <p style={styles.para}>Choose how you want to explore the algorithm:</p>
-                <div style={styles.buttonRow}>
-                  <button style={styles.primaryBtn} onClick={onStartGranular}>
-                    Explore with Granular Step →
-                  </button>
-                  <button style={styles.secondaryBtn} onClick={onStartFull}>
-                    Watch a Full Run →
-                  </button>
-                </div>
-                <p style={styles.hint}>
-                  <span style={styles.strong}>Granular Step</span> walks through each action within an
-                  episode — see perception, Q-values, and rewards for every move.
-                  <br />
-                  <span style={styles.strong}>Full Step</span> runs complete episodes and shows the
-                  board, chart, and status side by side.
                 </p>
               </div>
             </div>
@@ -189,6 +184,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: colors.text.secondary,
     lineHeight: '1.6',
     margin: '0 0 24px 0',
+  },
+  ctaBox: {
+    marginBottom: 20,
+    padding: '16px 18px 12px',
+    border: `1px solid ${colors.border.subtle}`,
+    borderRadius: 6,
+    backgroundColor: colors.bg.surface,
+  },
+  ctaHint: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    lineHeight: '1.7',
+    margin: '10px 0 0 0',
   },
   section: {
     marginBottom: 16,
