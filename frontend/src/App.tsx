@@ -7,15 +7,20 @@ import { StatusBar } from './components/StatusBar';
 import { QMatrixInspector } from './components/QMatrixInspector';
 import { EpisodeChart } from './components/EpisodeChart';
 import { SettingsSummary } from './components/SettingsSummary';
-import { PerceptionDisplay } from './components/PerceptionDisplay';
 import { TabBar, type TabId } from './components/TabBar';
-import { StepWalkthrough } from './components/StepWalkthrough';
 import { HelpBar } from './components/HelpBar';
 import { HelpGlossary, HELP_SECTIONS, type HelpSectionId } from './components/HelpGlossary';
 import { GettingStartedTab } from './components/GettingStartedTab';
+import { PhaseBar } from './components/PhaseBar';
+import { PerceivePanel } from './components/PerceivePanel';
+import { DecidePanel } from './components/DecidePanel';
+import { ActPanel } from './components/ActPanel';
+import { RewardPanel } from './components/RewardPanel';
+import { LearnPanel } from './components/LearnPanel';
 import { colors } from './colors';
 import { DEFAULT_CONFIG, type AlgorithmConfig } from './engine/types';
 import { QMatrix } from './engine/q-matrix';
+import { PHASE_COUNT } from './engine/phase-data';
 
 // ---------------------------------------------------------------------------
 // App Component
@@ -25,6 +30,7 @@ const App: React.FC = () => {
   const algorithm = useBufferedAlgorithm();
   const [activeTab, setActiveTab] = useState<TabId>('getting-started');
   const [stepIndex, setStepIndex] = useState(0);
+  const [phaseIndex, setPhaseIndex] = useState(0);
   const [helpSection, setHelpSection] = useState<HelpSectionId>('problem');
   const [microPlaying, setMicroPlaying] = useState(false);
   const microIntervalRef = useRef<number | null>(null);
@@ -40,6 +46,7 @@ const App: React.FC = () => {
     setMicroPlaying(false);
     algorithm.reset();
     setStepIndex(0);
+    setPhaseIndex(0);
   }, [algorithm]);
 
   const hasStarted = algorithm.boardState !== null;
@@ -49,9 +56,10 @@ const App: React.FC = () => {
     algorithm.setCaptureSteps(activeTab === 'granular');
   }, [activeTab, algorithm.setCaptureSteps]);
 
-  // Reset step index when new step history arrives
+  // Reset step and phase index when new step history arrives
   useEffect(() => {
     setStepIndex(0);
+    setPhaseIndex(0);
   }, [algorithm.lastStepHistory]);
 
   // Pre-start keyboard shortcut: → auto-starts and steps into granular mode
@@ -79,23 +87,35 @@ const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  // --- Granular (micro-step) callbacks ---
+  // --- Granular (phase-level) callbacks ---
 
   const handleGranularStep = useCallback(() => {
     const history = algorithm.lastStepHistory;
     if (!history || history.length === 0) {
+      // No episode yet — compute first one
       algorithm.step();
       return;
     }
-    const maxIndex = history.length - 1;
-    if (stepIndex >= maxIndex) {
-      if (!algorithm.algorithmEnded) {
-        algorithm.step();
+
+    const maxStepIndex = history.length - 1;
+
+    if (phaseIndex < PHASE_COUNT - 1) {
+      // Advance to next phase within the same step
+      setPhaseIndex(prev => prev + 1);
+    } else {
+      // At last phase — advance to next step, phase 0
+      if (stepIndex < maxStepIndex) {
+        setStepIndex(prev => prev + 1);
+        setPhaseIndex(0);
+      } else {
+        // At last step of episode — advance to next episode
+        if (!algorithm.algorithmEnded) {
+          algorithm.step();
+          // stepIndex and phaseIndex reset via the useEffect on lastStepHistory
+        }
       }
-      return;
     }
-    setStepIndex(prev => prev + 1);
-  }, [algorithm, stepIndex]);
+  }, [algorithm, stepIndex, phaseIndex]);
 
   const handleGranularStepN = useCallback((count: number) => {
     const history = algorithm.lastStepHistory;
@@ -103,17 +123,32 @@ const App: React.FC = () => {
       algorithm.step();
       return;
     }
-    const maxIndex = history.length - 1;
-    setStepIndex(prev => Math.min(prev + count, maxIndex));
-  }, [algorithm]);
+
+    const maxStepIndex = history.length - 1;
+    // Calculate total phase position and advance
+    let totalPhasePos = stepIndex * PHASE_COUNT + phaseIndex + count;
+    const maxPhasePos = maxStepIndex * PHASE_COUNT + (PHASE_COUNT - 1);
+    totalPhasePos = Math.min(totalPhasePos, maxPhasePos);
+
+    const newStepIndex = Math.floor(totalPhasePos / PHASE_COUNT);
+    const newPhaseIndex = totalPhasePos % PHASE_COUNT;
+    setStepIndex(newStepIndex);
+    setPhaseIndex(newPhaseIndex);
+  }, [algorithm, stepIndex, phaseIndex]);
 
   const handleGranularBack = useCallback(() => {
-    if (stepIndex > 0) {
+    if (phaseIndex > 0) {
+      // Go back one phase
+      setPhaseIndex(prev => prev - 1);
+    } else if (stepIndex > 0) {
+      // Go to last phase of previous step
       setStepIndex(prev => prev - 1);
+      setPhaseIndex(PHASE_COUNT - 1);
     } else {
+      // At step 0, phase 0 — undo episode
       algorithm.goBack();
     }
-  }, [stepIndex, algorithm]);
+  }, [stepIndex, phaseIndex, algorithm]);
 
   const handleGranularPlay = useCallback(() => {
     setMicroPlaying(true);
@@ -127,7 +162,7 @@ const App: React.FC = () => {
   const granularStepRef = useRef(handleGranularStep);
   granularStepRef.current = handleGranularStep;
 
-  // Micro auto-play interval
+  // Micro auto-play interval (drives phase-level advancement)
   useEffect(() => {
     if (microIntervalRef.current != null) {
       clearInterval(microIntervalRef.current);
@@ -171,13 +206,6 @@ const App: React.FC = () => {
     setActiveTab('granular');
   }, [hasStarted, algorithm]);
 
-  const handleStartFull = useCallback(() => {
-    if (!hasStarted) {
-      algorithm.start(DEFAULT_CONFIG);
-    }
-    setActiveTab('full');
-  }, [hasStarted, algorithm]);
-
   return (
     <div style={styles.app}>
       {/* ═══════════════════════════════════════════════ */}
@@ -211,7 +239,7 @@ const App: React.FC = () => {
               onSpeedChange={algorithm.setSpeed}
               hasStarted={hasStarted}
               algorithmEnded={algorithm.algorithmEnded}
-              canGoBack={isGranular ? (stepIndex > 0 || algorithm.canGoBack) : algorithm.canGoBack}
+              canGoBack={isGranular ? (phaseIndex > 0 || stepIndex > 0 || algorithm.canGoBack) : algorithm.canGoBack}
               isMicro={isGranular}
             />
           );
@@ -269,7 +297,6 @@ const App: React.FC = () => {
           {activeTab === 'getting-started' && (
             <GettingStartedTab
               onStartGranular={handleStartGranular}
-              onStartFull={handleStartFull}
               onOpenGlossary={() => handleOpenGlossary()}
             />
           )}
@@ -285,10 +312,68 @@ const App: React.FC = () => {
             </>
           )}
 
-          {/* Full Step */}
-          {activeTab === 'full' && (
-            <div style={styles.fullLayout}>
-              <div style={styles.fullLeftCol}>
+          {/* Granular Step (phase-level drill-down) */}
+          {activeTab === 'granular' && (() => {
+            const activeStep = algorithm.lastStepHistory?.[stepIndex] ?? null;
+            const phases = activeStep?.phases ?? null;
+
+            // Board state: show post-move for simplicity (matches existing behavior)
+            const granularBoardState = activeStep?.boardSnapshot ?? algorithm.boardState;
+            const granularPerceptionKey = activeStep?.boardSnapshot.perceptionKey ?? algorithm.currentPerceptionId;
+            const granularVisited = algorithm.lastStepHistory
+              ? new Set(algorithm.lastStepHistory.slice(0, stepIndex + 1).map(s => {
+                  const [bx, by] = s.boardSnapshot.benderPosition;
+                  return `${bx},${by}`;
+                }))
+              : undefined;
+
+            return (
+              <div style={styles.granularLayout}>
+                {/* Phase pipeline bar */}
+                <PhaseBar
+                  currentPhase={phaseIndex}
+                  onPhaseClick={setPhaseIndex}
+                  currentStep={activeStep?.step.stepNumber ?? 0}
+                  totalSteps={algorithm.algorithmConfig?.stepLimit ?? 200}
+                  currentEpisode={algorithm.currentEpisode}
+                  totalEpisodes={algorithm.algorithmConfig?.episodeLimit ?? 5000}
+                  hasData={activeStep !== null}
+                />
+
+                <div style={styles.granularColumns}>
+                  {/* Left: Board */}
+                  <div style={styles.granularLeftCol}>
+                    <Board boardState={granularBoardState} visitedCells={granularVisited} />
+                  </div>
+
+                  {/* Right: Phase detail + QMatrix */}
+                  <div style={styles.granularRightCol}>
+                    <div style={styles.phasePanel}>
+                      {!phases && (
+                        <div style={styles.phasePlaceholder}>
+                          Click <span style={{ color: colors.accent.blue }}>Step ({'\u2192'})</span> to begin
+                        </div>
+                      )}
+                      {phases && phaseIndex === 0 && <PerceivePanel data={phases.perceive} />}
+                      {phases && phaseIndex === 1 && <DecidePanel data={phases.decide} />}
+                      {phases && phaseIndex === 2 && <ActPanel data={phases.act} />}
+                      {phases && phaseIndex === 3 && <RewardPanel data={phases.reward} />}
+                      {phases && phaseIndex === 4 && <LearnPanel data={phases.learn} />}
+                    </div>
+                    <QMatrixInspector
+                      qMatrix={granularQMatrix}
+                      currentPerceptionId={granularPerceptionKey}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Chart tab (episode-level view) */}
+          {activeTab === 'chart' && (
+            <div style={styles.chartLayout}>
+              <div style={styles.chartLeftCol}>
                 <Board boardState={algorithm.boardState} />
                 <StatusBar
                   currentEpisode={algorithm.currentEpisode}
@@ -301,7 +386,7 @@ const App: React.FC = () => {
                   algorithmConfig={algorithm.algorithmConfig}
                 />
               </div>
-              <div style={styles.fullRightCol}>
+              <div style={styles.chartRightCol}>
                 <EpisodeChart
                   summariesRef={algorithm.allSummariesRef}
                   playheadRef={algorithm.chartPlayheadRef}
@@ -310,52 +395,6 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-
-          {/* Granular Step */}
-          {activeTab === 'granular' && (() => {
-            const activeStep = algorithm.lastStepHistory?.[stepIndex] ?? null;
-            const granularBoardState = activeStep?.boardSnapshot ?? algorithm.boardState;
-            const granularPerceptionKey = activeStep?.boardSnapshot.perceptionKey ?? algorithm.currentPerceptionId;
-            const granularBenderPosition = activeStep?.boardSnapshot.benderPosition ?? algorithm.boardState?.benderPosition ?? null;
-            const granularVisited = algorithm.lastStepHistory
-              ? new Set(algorithm.lastStepHistory.slice(0, stepIndex + 1).map(s => {
-                  const [bx, by] = s.boardSnapshot.benderPosition;
-                  return `${bx},${by}`;
-                }))
-              : undefined;
-            return (
-              <div style={styles.granularLayout}>
-                <div style={styles.granularLeftCol}>
-                  <Board boardState={granularBoardState} visitedCells={granularVisited} />
-                </div>
-                <div style={styles.granularRightCol}>
-                  <div style={styles.granularTopRow}>
-                    <div style={styles.granularTopRowHalf}>
-                      <StepWalkthrough
-                        stepHistory={algorithm.lastStepHistory}
-                        currentStepIndex={stepIndex}
-                        onStepIndexChange={setStepIndex}
-                        onNextEpisode={algorithm.step}
-                        onPrevEpisode={algorithm.goBack}
-                        canGoBack={algorithm.canGoBack}
-                        algorithmEnded={algorithm.algorithmEnded}
-                      />
-                    </div>
-                    <div style={styles.granularTopRowHalf}>
-                      <PerceptionDisplay
-                        perceptionKey={granularPerceptionKey}
-                        benderPosition={granularBenderPosition}
-                      />
-                    </div>
-                  </div>
-                  <QMatrixInspector
-                    qMatrix={granularQMatrix}
-                    currentPerceptionId={granularPerceptionKey}
-                  />
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Help / Glossary */}
           {activeTab === 'glossary' && (
@@ -500,40 +539,24 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
 
-  // --- Full Step tab layout ---
-  fullLayout: {
-    display: 'flex',
-    gap: 16,
-    alignItems: 'stretch',
-    flex: 1,
-    minHeight: 0,
-  },
-  fullLeftCol: {
-    flex: '1 1 0',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 12,
-    minWidth: 0,
-    minHeight: 0,
-  },
-  fullRightCol: {
-    flex: '1 1 0',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 8,
-    minWidth: 0,
-    minHeight: 0,
-  },
-
   // --- Granular Step tab layout ---
   granularLayout: {
     display: 'flex',
+    flexDirection: 'column' as const,
+    flex: 1,
+    minHeight: 0,
+    gap: 0,
+    margin: '-12px -24px',  // Offset tabContent padding so PhaseBar goes edge-to-edge
+  },
+  granularColumns: {
+    display: 'flex',
     gap: 16,
     flex: 1,
     minHeight: 0,
+    padding: '12px 24px',  // Restore padding for the content below PhaseBar
   },
   granularLeftCol: {
-    flex: '0 0 600px',
+    flex: '0 0 500px',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: 12,
@@ -546,12 +569,45 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     overflowY: 'auto' as const,
   },
-  granularTopRow: {
-    display: 'flex',
-    gap: 12,
+  phasePanel: {
+    padding: '12px 16px',
+    backgroundColor: colors.bg.surface,
+    borderRadius: 6,
+    border: `1px solid ${colors.border.subtle}`,
+    minHeight: 200,
   },
-  granularTopRowHalf: {
+  phasePlaceholder: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 200,
+    fontSize: 13,
+    fontFamily: 'monospace',
+    color: colors.text.tertiary,
+  },
+
+  // --- Chart tab layout ---
+  chartLayout: {
+    display: 'flex',
+    gap: 16,
+    alignItems: 'stretch',
+    flex: 1,
+    minHeight: 0,
+  },
+  chartLeftCol: {
     flex: '1 1 0',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 12,
     minWidth: 0,
+    minHeight: 0,
+  },
+  chartRightCol: {
+    flex: '1 1 0',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 8,
+    minWidth: 0,
+    minHeight: 0,
   },
 };

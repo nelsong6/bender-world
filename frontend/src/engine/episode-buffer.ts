@@ -1,4 +1,5 @@
 import type { AlgorithmConfig, EpisodeSummary, StepResult, MoveType } from './types';
+import type { PhaseStepData } from './phase-data';
 import { AlgorithmRunner, type AlgorithmSnapshot } from './algorithm-runner';
 
 export interface WalkthroughStep {
@@ -9,6 +10,8 @@ export interface WalkthroughStep {
     perceptionKey: string;
   };
   qMatrixSnapshot: Map<number, number[]>;
+  /** Phase-level detail for drill-down visualization. */
+  phases?: PhaseStepData;
 }
 
 export interface EpisodeBufferEntry {
@@ -209,8 +212,10 @@ export class EpisodeBuffer {
     let episodeNumber = -1;
 
     while (!this.runner.algorithmEnded) {
-      const step = this.runner.runStep();
-      if (!step) break;
+      const result = this.runner.runStepWithPhases();
+      if (!result) break;
+
+      const { stepResult: step, phases } = result;
 
       if (episodeNumber === -1) {
         episodeNumber = step.episodeNumber;
@@ -223,7 +228,7 @@ export class EpisodeBuffer {
       // Capture board state and Q-matrix after this step
       const boardSnapshot = this.runner.getCurrentState();
       const qMatrixSnapshot = this.runner.getQMatrix().snapshot();
-      steps.push({ step, boardSnapshot, qMatrixSnapshot });
+      steps.push({ step, boardSnapshot, qMatrixSnapshot, phases });
       lastStep = step;
     }
 

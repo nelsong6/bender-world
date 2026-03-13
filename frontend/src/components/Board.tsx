@@ -77,12 +77,13 @@ export const Board: React.FC<BoardProps> = ({ boardState, visitedCells }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const spritesRef = useRef<SpriteMap | null>(null);
   const visitedRef = useRef<Set<string>>(new Set());
+  const drawRef = useRef<() => void>(() => {});
 
   // Load sprites once
   useEffect(() => {
     loadSprites().then((sprites) => {
       spritesRef.current = sprites;
-      draw();
+      drawRef.current();
     });
   }, []);
 
@@ -98,6 +99,7 @@ export const Board: React.FC<BoardProps> = ({ boardState, visitedCells }) => {
     visitedRef.current.add(`${bx},${by}`);
   }, [boardState, visitedCells]);
 
+  // Draw function — reads current props via closure, called via stable ref
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -106,7 +108,8 @@ export const Board: React.FC<BoardProps> = ({ boardState, visitedCells }) => {
     if (!ctx) return;
 
     const sprites = spritesRef.current;
-    const size = canvas.width;
+    const dpr = window.devicePixelRatio || 1;
+    const size = canvas.width / dpr;
     const labelMargin = 30;
     const gridSize = size - labelMargin;
     const cellSize = gridSize / 10;
@@ -240,37 +243,41 @@ export const Board: React.FC<BoardProps> = ({ boardState, visitedCells }) => {
     }
   }, [boardState, visitedCells]);
 
-  // Resize canvas to fit container
+  // Keep drawRef in sync so ResizeObserver always calls the latest draw
+  drawRef.current = draw;
+
+  // ResizeObserver — set up ONCE, decoupled from draw lifecycle.
+  // Calls draw via stable drawRef so it never needs to re-subscribe.
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
+    // Only update canvas buffer resolution (not CSS size — that's handled by CSS).
+    const updateBufferSize = (width: number) => {
+      if (width < 50) return;
+      const size = Math.min(width, 600);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.scale(dpr, dpr);
+      drawRef.current();
+    };
+
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const width = entry.contentRect.width;
-        const size = Math.min(width, 600);
-        canvas.width = size;
-        canvas.height = size;
-        canvas.style.width = `${size}px`;
-        canvas.style.height = `${size}px`;
-        draw();
+        updateBufferSize(entry.contentRect.width);
       }
     });
 
     resizeObserver.observe(container);
-
-    const width = container.clientWidth;
-    const size = Math.min(width, 600);
-    canvas.width = size;
-    canvas.height = size;
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
+    updateBufferSize(container.clientWidth);
 
     return () => resizeObserver.disconnect();
-  }, [draw]);
+  }, []); // Empty deps — set up once, never torn down on re-render
 
-  // Redraw whenever board state changes
+  // Redraw whenever board state or visited cells change
   useEffect(() => {
     draw();
   }, [draw]);
@@ -290,13 +297,14 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     width: '100%',
     maxWidth: 600,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
+    aspectRatio: '1',
     position: 'relative',
   },
   canvas: {
+    width: '100%',
+    height: '100%',
     borderRadius: 8,
     border: `1px solid ${colors.border.subtle}`,
+    boxSizing: 'border-box' as const,
   },
 };

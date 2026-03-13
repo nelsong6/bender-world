@@ -10,6 +10,7 @@
 
 import { MoveType, ALL_MOVES } from './types';
 import { randomInt as prngRandomInt } from './prng';
+import type { DecidePhaseData } from './phase-data';
 
 /** Number of possible actions (Left, Right, Up, Down, Grab). */
 const NUM_ACTIONS = 5;
@@ -135,6 +136,85 @@ export class QMatrix {
     return [prngRandomInt(rng, 0, NUM_ACTIONS - 1), true];
   }
 
+  /**
+   * Like selectAction(), but returns all intermediate decision data for phase visualization.
+   * CRITICAL: consumes PRNG in the exact same order as selectAction().
+   */
+  selectActionDetailed(stateId: number, epsilon: number, rng: () => number): DecidePhaseData {
+    const hasData = this.data.has(stateId);
+    const qValuesForState = hasData ? [...this.data.get(stateId)!] : [0, 0, 0, 0, 0];
+
+    if (hasData) {
+      // Same PRNG call as selectAction line 110
+      const randomRoll = prngRandomInt(rng, 1, 100);
+      const threshold = epsilon * 100;
+
+      if (randomRoll < threshold) {
+        // Exploring — same PRNG call as selectAction line 111
+        const randomActionRoll = prngRandomInt(rng, 0, NUM_ACTIONS - 1);
+        return {
+          epsilon,
+          stateHasData: true,
+          randomRoll,
+          threshold,
+          isExploring: true,
+          qValuesForState,
+          bestValue: Math.max(...qValuesForState),
+          bestIndices: [],
+          randomActionRoll,
+          chosenActionIndex: randomActionRoll,
+          chosenActionName: ALL_MOVES[randomActionRoll],
+        };
+      }
+
+      // Greedy — find best with tie-breaking (same logic as selectAction lines 115-130)
+      const values = this.data.get(stateId)!;
+      let bestValue = values[0];
+      const bestIndices: number[] = [0];
+      for (let i = 1; i < NUM_ACTIONS; i++) {
+        if (values[i] > bestValue) {
+          bestValue = values[i];
+          bestIndices.length = 0;
+          bestIndices.push(i);
+        } else if (values[i] === bestValue) {
+          bestIndices.push(i);
+        }
+      }
+      // Same PRNG call as selectAction line 129
+      const tieBreakRoll = prngRandomInt(rng, 0, bestIndices.length - 1);
+      const chosenIndex = bestIndices[tieBreakRoll];
+      return {
+        epsilon,
+        stateHasData: true,
+        randomRoll,
+        threshold,
+        isExploring: false,
+        qValuesForState,
+        bestValue,
+        bestIndices: [...bestIndices],
+        tieBreakRoll,
+        chosenActionIndex: chosenIndex,
+        chosenActionName: ALL_MOVES[chosenIndex],
+      };
+    }
+
+    // No data — random move (same PRNG call as selectAction line 135)
+    const randomActionRoll = prngRandomInt(rng, 0, NUM_ACTIONS - 1);
+    return {
+      epsilon,
+      stateHasData: false,
+      randomRoll: 0,
+      threshold: epsilon * 100,
+      isExploring: true,
+      qValuesForState,
+      bestValue: 0,
+      bestIndices: [],
+      randomActionRoll,
+      chosenActionIndex: randomActionRoll,
+      chosenActionName: ALL_MOVES[randomActionRoll],
+    };
+  }
+
   // --------------------------------------------------------------------------
   // Q-value update (ported from Qmatrix.UpdateState)
   // --------------------------------------------------------------------------
@@ -194,6 +274,69 @@ export class QMatrix {
     }
 
     return false;
+  }
+
+  /**
+   * Like update(), but returns all intermediate computation values for phase visualization.
+   * Also performs the actual update (not read-only).
+   */
+  updateDetailed(
+    stateToUpdate: number,
+    resultState: number,
+    actionIndex: number,
+    baseReward: number,
+    gamma: number,
+    eta: number,
+    stepNumber: number,
+  ): {
+    oldBestValue: number;
+    newBestValue: number;
+    difference: number;
+    discountFactor: number;
+    discountedDifference: number;
+    combined: number;
+    finalValue: number;
+    wasUpdated: boolean;
+    qRowBefore: number[];
+    qRowAfter: number[];
+  } {
+    // Capture before state
+    const qRowBefore = this.data.has(stateToUpdate)
+      ? [...this.data.get(stateToUpdate)!]
+      : [0, 0, 0, 0, 0];
+
+    const oldBestValue = this.getBestValue(stateToUpdate);
+    const newBestValue = this.getBestValue(resultState);
+    const difference = newBestValue - oldBestValue;
+    const discountFactor = Math.pow(gamma, stepNumber - 1);
+    const discountedDifference = difference * discountFactor;
+    const combined = discountedDifference + baseReward;
+    const finalValue = eta * combined;
+
+    let wasUpdated = false;
+    if (finalValue !== 0) {
+      const values = this.getValues(stateToUpdate);
+      values[actionIndex] = finalValue;
+      wasUpdated = true;
+    }
+
+    // Capture after state
+    const qRowAfter = this.data.has(stateToUpdate)
+      ? [...this.data.get(stateToUpdate)!]
+      : [0, 0, 0, 0, 0];
+
+    return {
+      oldBestValue,
+      newBestValue,
+      difference,
+      discountFactor,
+      discountedDifference,
+      combined,
+      finalValue,
+      wasUpdated,
+      qRowBefore,
+      qRowAfter,
+    };
   }
 
   // --------------------------------------------------------------------------

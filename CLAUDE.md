@@ -16,13 +16,14 @@ This is an **educational visualization tool**, not a production RL system. Every
 
 ## Intended User Flow
 
-The primary experience (99% of users) is **Granular Step mode** — watching Bender move around the grid one step at a time. The app should funnel users toward this as quickly as possible:
+The primary experience (99% of users) is **Granular Step mode** — watching Bender's Q-learning algorithm think, one phase at a time. The app should funnel users toward this as quickly as possible:
 
-1. **Getting Started tab** → user reads the brief intro, clicks **"Explore with Granular Step →"**
-2. **Granular Step tab** → user clicks **Step (→)** to advance one micro-step at a time (the Controls bar automatically switches to step-level granularity on this tab), watching Bender move cell by cell
-3. Along the way, the user sees the **PerceptionDisplay** update (what Bender sees), the **QMatrixInspector** update (what Bender is learning), and the **Board** animate (where Bender goes)
+1. **Getting Started tab** → user reads the brief intro, clicks **"Watch Bender Learn →"**
+2. **Granular Step tab** → user clicks **Step (→)** to advance one phase at a time through the 5 phases of each micro-step (Perceive → Decide → Act → Reward → Learn)
+3. The **PhaseBar** shows pipeline progress, while the **phase detail panel** shows the math: sensor readings, epsilon roll, Q-value lookup, reward mapping, and the full Q-update formula with all intermediate values
+4. The **Board** animates (where Bender goes) and the **QMatrixInspector** updates (what Bender is learning)
 
-The "Full Step" tab and high-speed playback exist for power users who want to watch convergence over thousands of episodes, but the core appeal is the step-by-step micro view where you can see the algorithm thinking. Design decisions should prioritize making this granular flow feel responsive, intuitive, and visually clear.
+The **Full Step tab** exists for power users who want to watch convergence over thousands of episodes, but the core appeal is the phase-by-phase micro view where you can see the algorithm thinking. Design decisions should prioritize making this granular flow feel responsive, intuitive, and visually clear.
 
 ## Overview
 
@@ -172,7 +173,9 @@ Sparse Q-value storage with epsilon-greedy action selection.
 - `getValues(stateId)` — get 5 action values for a state (lazy-init to zeros)
 - `getBestValue(stateId)` — max Q-value across actions (0 if state unseen)
 - `selectAction(stateId, epsilon, rng)` — epsilon-greedy with random tie-breaking
-- `update(stateToUpdate, resultState, actionIndex, baseReward, gamma, eta, stepNumber)` — Q-value update (exact C# formula)
+- `selectActionDetailed(stateId, epsilon, rng)` — like `selectAction` but returns `DecidePhaseData` with all intermediate decision values (epsilon roll, Q-values examined, tie-breaking). Consumes PRNG in identical order for determinism.
+- `update(...)` — Q-value update (exact C# formula)
+- `updateDetailed(...)` — like `update` but returns all 8 intermediate computation values (oldBestValue, newBestValue, difference, discountFactor, etc.) plus before/after Q-row. Also performs the actual update.
 - `snapshot()` / `restore()` — deep copy for undo/redo
 - `toJSON()` / `fromJSON()` — serialization
 - `getEntryCount()` — count states with non-zero values
@@ -183,6 +186,7 @@ Wraps board + Q-matrix + PRNG. Runs episodes and steps. Provides snapshots for u
 
 **Key methods:**
 - `runStep()` — execute one step: perceive → select action → apply move → get reward → update Q-matrix → return `StepResult`
+- `runStepWithPhases()` — like `runStep` but captures all intermediate phase data (`PhaseStepData`) at each of the 5 phases. Returns `{ stepResult, phases }`. Uses `selectActionDetailed` and `updateDetailed` internally while maintaining identical PRNG sequence.
 - `runEpisode()` — run full episode (up to stepLimit steps), return `EpisodeSummary`
 - `startNewEpisode()` — shuffle board, reset counters, decay epsilon
 - `getSnapshot()` / `restoreSnapshot()` — save/restore algorithm state (Q-matrix + PRNG + counters)
@@ -214,8 +218,31 @@ Decouples episode computation from animation playback. Pre-computes episodes ahe
 
 **`WalkthroughStep` interface:**
 ```ts
-{ step: StepResult; boardSnapshot: { board, benderPosition, perceptionKey } }
+{
+  step: StepResult;
+  boardSnapshot: { board, benderPosition, perceptionKey };
+  qMatrixSnapshot?: Map<number, number[]>;  // per-step Q-matrix state for QMatrixInspector
+  phases?: PhaseStepData;                    // 5-phase decomposition for granular drill-down
+}
 ```
+
+### `phase-data.ts` — Phase Decomposition Types
+
+Defines the data model for decomposing each Q-learning step into 5 observable phases.
+
+**Enums & Constants:**
+- `StepPhase` — enum (0–4): Perceive, Decide, Act, Reward, Learn
+- `PHASE_COUNT = 5`
+- `PHASE_LABELS` — human-readable names for each phase
+
+**Data Interfaces:**
+- `EncodingDigit` — base-3 encoding table row: direction, percept, digitValue, weight, contribution
+- `PerceivePhaseData` — benderPosition, 5 sensor readings, perceptionKey, perceptionId, encoding digits
+- `DecidePhaseData` — epsilon, randomRoll (1–100), threshold, isExploring, qValuesForState, bestValue, bestIndices (ties), tieBreakRoll, chosenActionIndex/Name
+- `ActPhaseData` — move, moveResult, positionBefore/After
+- `RewardPhaseData` — moveResult, reward, full rewardConfig, episodeRewardBefore/After
+- `LearnPhaseData` — perceptionBefore/After IDs, actionIndex/Name, stepNumber, 8 formula intermediates (oldBestValue through finalValue), wasUpdated, qRowBefore/After (5 values each)
+- `PhaseStepData` — aggregate: `{ perceive, decide, act, reward, learn }`
 
 ### `animation-clock.ts` — requestAnimationFrame Playhead Driver
 
@@ -299,9 +326,9 @@ The main layout follows the eight-queens sidebar+content pattern:
 │ Bar │                                           │
 │     │  getting-started: GettingStartedTab       │  flex: 1
 │ (v  │  config: ConfigPanel + SettingsSummary    │  minHeight: 0
-│  e  │  full: Board+StatusBar | EpisodeChart     │  overflowY: auto
-│  r  │  granular: Board | [StepWalk+Perception]   │
-│  t  │                    QMatrix                │
+│  e  │  granular: PhaseBar + Board | PhasePanel  │  overflowY: auto
+│  r  │            + QMatrixInspector             │
+│  t  │  chart: Board+StatusBar | EpisodeChart    │
 │  i  │  glossary: [section picker] + content     │
 │  c  │                                           │
 │  a  │                                           │
@@ -313,7 +340,7 @@ The main layout follows the eight-queens sidebar+content pattern:
 **Sticky top section** (`flexShrink: 0`, `zIndex: 160`):
 - Header with title + subtitle + Fry squinting image (far right, decorative, 64px tall, flush with bottom border)
 - HelpBar (always visible)
-- Controls bar (only when `hasStarted` — i.e., after config is submitted). Callbacks are tab-aware: on the Granular Step tab, Controls receives micro-step callbacks (`handleGranularStep`, etc.) instead of episode-level callbacks. A `microPlaying` state + `setInterval` drives auto-play at the step level.
+- Controls bar (only when `hasStarted` — i.e., after config is submitted). Callbacks are tab-aware: on the Granular Step tab, Controls receives phase-level callbacks (`handleGranularStep`, etc.) instead of episode-level callbacks. A `microPlaying` state + `setInterval` drives auto-play at the phase level.
 
 **Main section** (`flex: 1`, `flexDirection: row`, `minHeight: 0`):
 - Left sidebar: vertical `TabBar` + Planet Express ship image (bottom, decorative, 120×90px, 40% opacity)
@@ -330,8 +357,8 @@ The main layout follows the eight-queens sidebar+content pattern:
 |--------|-------|---------|
 | `getting-started` | Getting Started | Welcome, quick-start buttons, how-it-works terms |
 | `config` | Config | Preset buttons, parameter sliders, settings summary |
-| `full` | Full Step | Board + StatusBar alongside EpisodeChart (2 columns) |
-| `granular` | Granular Step | StepWalkthrough + Board (left col) alongside PerceptionDisplay + QMatrixInspector (right col) |
+| `granular` | Granular Step | PhaseBar + Board (left) alongside phase detail panel + QMatrixInspector (right) |
+| `chart` | Full Step | Board + StatusBar alongside EpisodeChart (2 columns) |
 | `glossary` | Help / Glossary | Secondary section picker sidebar + glossary content |
 
 **Styling pattern (shared with eight-queens):**
@@ -346,7 +373,7 @@ The main layout follows the eight-queens sidebar+content pattern:
 Two-column layout (text left, board preview right):
 
 **Left column sections:**
-1. **CTA box** — "Watch Bender Learn →" + "Full Run (advanced) →"
+1. **CTA box** — "Watch Bender Learn →"
 2. **Title + intro**
 3. **Using the Help Bar** — hover for help, press S to pin/unpin, glossary links
 4. **How It Works** — brief glossary terms: Grid, Beer Can, Wall, Episode, Run, Q-Value, Epsilon
@@ -414,9 +441,10 @@ Renders glossary content for the selected section. Used with a secondary sidebar
 
 Flat horizontal bar in the sticky top section (only visible after training starts).
 
-**Tab-aware granularity:** Controls automatically switch between episode-level and micro-step-level behavior based on the active tab. On the Granular Step tab, all buttons operate on individual steps within an episode. On all other tabs, they operate on full episodes. This is achieved by App.tsx passing different callback functions — Controls itself is mostly tab-unaware, receiving only an `isMicro` prop for label changes.
+**Tab-aware granularity:** Controls automatically switch between episode-level and phase-level behavior based on the active tab. On the Granular Step tab, all buttons operate on individual phases within a step (5 phases per step). On all other tabs, they operate on full episodes. This is achieved by App.tsx passing different callback functions — Controls itself is mostly tab-unaware, receiving only an `isMicro` prop for label changes.
 
 **Buttons (episode mode — Full Step tab and others):**
+
 | Button | Shortcut | Action | Color |
 |--------|----------|--------|-------|
 | Play/Pause | Space | Toggle episode playback | Green |
@@ -426,19 +454,19 @@ Flat horizontal bar in the sticky top section (only visible after training start
 | +100 | — | Advance 100 episodes | Dark blue |
 | Reset | — | Return to config screen | Red |
 
-**Buttons (micro-step mode — Granular Step tab):**
+**Buttons (phase mode — Granular Step tab):**
 
 | Button | Shortcut | Action |
 |--------|----------|--------|
-| Play/Pause | Space | Toggle micro-step auto-play (setInterval-driven) |
-| Back | Left arrow | Go back 1 step; if at step 0, undo episode |
-| Step | Right arrow | Advance 1 step; if at end of episode, advance to next episode |
-| +10 | Shift+Right | Advance 10 steps (clamped to episode end) |
-| +100 | — | Advance 100 steps (clamped to episode end) |
+| Play/Pause | Space | Toggle phase auto-play (setInterval-driven) |
+| Back | Left arrow | Go back 1 phase; if at phase 0 step 0, undo episode |
+| Step | Right arrow | Advance 1 phase; wraps to next step at phase 4, next episode at last step |
+| +10 | Shift+Right | Advance 10 phases (wrapping across steps) |
+| +100 | — | Advance 100 phases (wrapping across steps) |
 
-**Speed slider:** Logarithmic scale from 1 to 500. Display shows "ep/s" in episode mode, "steps/s" in micro-step mode.
+**Speed slider:** Logarithmic scale from 1 to 500. Display shows "ep/s" in episode mode, "phases/s" in phase mode.
 
-**Props:** `isMicro?: boolean` — when true, speed label shows "steps/s" and help text reflects micro-step mode.
+**Props:** `isMicro?: boolean` — when true, speed label shows "phases/s" and help text reflects phase mode.
 
 **Keyboard shortcuts** (registered via `useEffect` + `keydown` listener):
 - Space: Play/Pause (only when algorithm is active and not ended)
@@ -468,7 +496,7 @@ Renders the game board using HTML5 Canvas with sprite overlays.
 
 **Sprite loading:** Async image loading with fallback to text indicators ("B" for Bender, "C" for can) while sprites load. Sprites loaded once and cached.
 
-**Responsive sizing:** `ResizeObserver` watches container width (max 600px canvas). HiDPI support via `devicePixelRatio` scaling (canvas internal resolution vs CSS display size).
+**Responsive sizing:** Container uses `aspectRatio: '1'` with `maxWidth: 600` to establish a stable square layout from the first frame. Canvas fills via CSS (`width/height: 100%`) — no JS-driven CSS sizing. A `ResizeObserver` (set up once with `[]` deps, decoupled from draw via `drawRef`) only updates the canvas buffer resolution (`canvas.width/height = cssSize * devicePixelRatio`) for HiDPI sharpness. This eliminates the "zoom" animation that occurred when JS set canvas CSS size after layout settled.
 
 **Visited tracking:** Board tracks which cells Bender has visited (explored border color vs unexplored). By default, an internal `visitedRef` Set accumulates positions on each render. In Granular Step mode, an optional `visitedCells?: Set<string>` prop overrides this — App.tsx computes the set from `lastStepHistory[0..stepIndex]` so stepping backward correctly removes teal highlights from cells not yet visited.
 
@@ -559,26 +587,74 @@ Only renders when `algorithmConfig` is not null (i.e., after training starts).
 
 ### StepWalkthrough.tsx — Step-by-Step Episode Replay
 
-Used in the Granular Step tab. Shows individual step details within an episode.
+Legacy component, no longer used in the Granular Step tab (replaced by PhaseBar + phase panels). Retained in the codebase but not rendered. Shows individual step details within an episode with slider navigation.
 
-**Controls:**
-- Episode navigation: "« Prev Episode" / "Next Episode »" buttons
-- Step navigation: slider + left/right buttons
-- Step counter: "step X / Y"
+### PhaseBar.tsx — Pipeline Progress Bar
 
-**Step details panel (always rendered for stable height):**
-- Position (1-indexed grid coordinates)
-- Move (Left/Right/Down/Up/Grab)
-- Strategy (Random vs Greedy, color-coded)
-- Result (HitWall/CanCollected/CanMissing/MoveSuccessful, color-coded)
-- Reward (signed, color-coded)
-- Episode Reward (running total)
-- Cans Collected
-- Perception key string
+Horizontal bar showing the 5 phases of each Q-learning step, adapted from eight-queens `PipelineBar.tsx`.
 
-When no step data exists, all values show "—" in `colors.text.disabled` to maintain consistent layout height.
+**5 segments with phase colors:**
 
-**Behavior:** When stepping past the end of an episode, clicking ">" triggers `onNextEpisode` (advances to the next episode).
+| Phase | Label | Color |
+|-------|-------|-------|
+| 0 | PERCEIVE | teal |
+| 1 | DECIDE | orange |
+| 2 | ACT | blue |
+| 3 | REWARD | gold |
+| 4 | LEARN | purple |
+
+- Current phase: full color + box-shadow glow
+- Past phases: color at 55% opacity
+- Future phases: `colors.bg.raised`
+- Labels below each segment
+
+**Counters:** Episode and step counters on the left side (`Ep X / Y`, `Step X / Y`).
+
+**Props:** `currentPhase`, `onPhaseClick`, `currentStep`, `totalSteps`, `currentEpisode`, `totalEpisodes`, `hasData`
+
+### PerceivePanel.tsx — Phase 0: Sensor Readings
+
+Embeds the existing `PerceptionDisplay` compass rose component and adds a base-3 encoding table below it.
+
+**Encoding table columns:** Direction | Percept | Digit | Weight | Contribution
+
+**Footer:** Sum total → State #ID
+
+### DecidePanel.tsx — Phase 1: Epsilon-Greedy Decision
+
+- **Epsilon bar:** Visual threshold zone (orange) with roll position marker
+- **Roll result:** "73 > 20 → EXPLOIT" or "12 < 20 → EXPLORE"
+- **Q-values table:** 5 action boxes when exploiting, best highlighted, tie info shown
+- **Random action display:** When exploring or state is new
+- **Decision badge:** Action name colored by strategy (blue=greedy, orange=random)
+
+### ActPanel.tsx — Phase 2: Move Execution
+
+- Action badge (Move Right / Grab)
+- Result badge (color-coded: green=CanCollected, red=HitWall, orange=CanMissing, gray=MoveSuccessful)
+- Position change: `(3, 5) → (4, 5)` or wall bounce indicator
+
+### RewardPanel.tsx — Phase 3: Reward Mapping
+
+- Reward config table with all 4 outcomes, active one highlighted with gold background + arrow
+- Running total: `episodeRewardBefore + reward = episodeRewardAfter`
+
+### LearnPanel.tsx — Phase 4: Q-Value Update
+
+7-line formula walkthrough using `FormulaRow` sub-component:
+```
+1. oldBestValue = Q_best(State #194)           = 0.850
+2. newBestValue = Q_best(State #207)           = 0.920
+3. difference   = 0.920 - 0.850                = 0.070
+4. discountFactor = γ^(step-1) = 0.9^14        = 0.229
+5. discounted   = 0.070 × 0.229                = 0.016
+6. combined     = 0.016 + 10                   = 10.016
+7. finalValue   = η × 10.016 = 0.1 × 10.016   = 1.002
+   Q[194][Right] = 1.002  ✓ Updated
+```
+
+- Line 7 highlighted with purple background
+- Before/after Q-row comparison (5 cells, changed cell highlighted in purple)
 
 ## Color Palette (`frontend/src/colors.ts`)
 
@@ -666,10 +742,10 @@ When the user clicks Step or Step-N, the clock enters sweep mode: it animates th
 
 | Key | Action (Full Step tab) | Action (Granular Step tab) | Context |
 | ----- | ------------------------ | --------------------------- | --------- |
-| Space | Play / Pause episodes | Play / Pause micro-steps | Only when algorithm started and not ended |
-| → | Step one episode | Step one micro-step (next episode at end) | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
-| Shift+→ | Step 10 episodes | Step 10 micro-steps (clamped) | Only when paused |
-| ← | Back (undo episode) | Back one micro-step (undo episode at step 0) | Only when paused and undo/step available |
+| Space | Play / Pause episodes | Play / Pause phases | Only when algorithm started and not ended |
+| → | Step one episode | Step one phase (wraps across steps/episodes) | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
+| Shift+→ | Step 10 episodes | Step 10 phases (wrapping) | Only when paused |
+| ← | Back (undo episode) | Back one phase (undo episode at step 0, phase 0) | Only when paused and undo/phase available |
 | S | Pin/unpin help text | Pin/unpin help text | Always (except when typing in inputs) |
 
 ## Sprites (`frontend/public/sprites/`)
@@ -712,9 +788,9 @@ Active tabs use `borderLeft/Top/Bottom` with `borderRight: 'none'` and `marginRi
 Board and EpisodeChart use Canvas for performance:
 1. Canvas element with refs
 2. HiDPI: set `canvas.width = cssWidth * devicePixelRatio`, scale context by `devicePixelRatio`
-3. ResizeObserver for responsive sizing
+3. ResizeObserver for responsive sizing (Board: buffer resolution only, CSS handles display size; Chart: sets both)
 4. For chart: own rAF loop reading from refs (no React dependency)
-5. For board: re-render on state change via `useEffect`
+5. For board: container with `aspectRatio: '1'` provides stable layout; ResizeObserver decoupled from draw via `drawRef` (empty `[]` deps — never torn down); re-render on state change via `useEffect`
 
 ### Flex Layout Pattern
 
@@ -769,13 +845,14 @@ q-matrix.ts          - QMatrix class; 243×5 sparse map; epsilon-greedy selectio
 algorithm-runner.ts  - AlgorithmRunner; wraps board+qmatrix+prng; runs episodes/steps; snapshots
 episode-buffer.ts    - EpisodeBuffer; async producer loop (setTimeout); WalkthroughStep capture
 animation-clock.ts   - AnimationClock; rAF playhead; normal + sweep modes; boundary callbacks
+phase-data.ts        - Phase decomposition types; StepPhase enum; 5 phase data interfaces
 ```
 
 ### Components (`frontend/src/components/`)
 ```
 App.tsx              - Root layout (sticky top + sidebar + content); tab orchestration
 TabBar.tsx           - 5-tab vertical sidebar navigation
-GettingStartedTab.tsx - Welcome page with quick-start buttons and board preview
+GettingStartedTab.tsx - Welcome page with quick-start button and board preview
 HelpBar.tsx          - Contextual help display (data-help hover + S pin)
 HelpGlossary.tsx     - 6-section glossary (Problem, Q-Learning, Q-Matrix, Perception, Controls, Presets)
 ConfigPanel.tsx      - Preset buttons + parameter sliders + reward sliders + Start button
@@ -786,7 +863,13 @@ EpisodeChart.tsx     - Canvas reward chart with gradients, moving average, toolt
 PerceptionDisplay.tsx - 3×3 compass rose showing 5-cell perception
 QMatrixInspector.tsx - Q-value table viewer with state selector and full table
 SettingsSummary.tsx  - Active configuration key-value display
-StepWalkthrough.tsx  - Step-by-step episode replay with episode/step navigation
+StepWalkthrough.tsx  - Step-by-step episode replay (legacy, no longer rendered)
+PhaseBar.tsx         - 5-segment pipeline progress bar (Perceive/Decide/Act/Reward/Learn)
+PerceivePanel.tsx    - Phase 0: sensor readings + base-3 encoding table
+DecidePanel.tsx      - Phase 1: epsilon-greedy decision visualization
+ActPanel.tsx         - Phase 2: move execution + result badge
+RewardPanel.tsx      - Phase 3: reward lookup + running episode total
+LearnPanel.tsx       - Phase 4: Q-update formula walkthrough + before/after Q-row
 ```
 
 ### Hooks & Data
@@ -836,3 +919,6 @@ Reverse-chronological record of significant changes, decisions, and context that
 - Added decorative Futurama images sourced from the original C# repo on GitHub (`nelsong6/BenderWorld`). Planet Express ship (`spaceship.png`, resized from 1024×768 to 120×90) in the left sidebar below the tab bar, pushed to bottom via `marginTop: 'auto'`, 40% opacity. Fry squinting (`fry-squinting.png`, 41×57) in the header bar far right, 64px display height, aligned flush with the header's bottom border via `alignSelf: 'flex-end'` + `marginBottom: -12`, 50% opacity. Both are `pointerEvents: 'none'` decorations.
 - Made Controls bar (Play/Back/Step/+10/+100) operate at micro-step granularity when the Granular Step tab is active. Previously all controls always advanced full episodes, forcing users to use the small `< >` buttons in StepWalkthrough. Now App.tsx wraps the Controls callbacks based on `activeTab === 'granular'`: Step advances one micro-step within the episode (advancing to next episode at end), Back goes back one step (undoing the episode at step 0), +10/+100 jump N steps clamped to episode end. Play uses a `setInterval`-based auto-advance loop (`microPlaying` state + `microIntervalRef`) instead of the AnimationClock pipeline. Speed slider label dynamically shows "steps/s" vs "ep/s". Controls.tsx gained a minimal `isMicro` prop for the label; all behavioral logic lives in App.tsx. Safety effects stop micro-play on tab switch, reset, and algorithm end.
 - Replaced all green accent colors with muted sage-green (`#5a8e70`) to match the Planet Express ship hull color. Changed 7 values in `colors.ts`: `accent.green`, `accent.greenLight`, `board.currentBorder`, `chart.rewardLine/Glow/Fill`, `qValue.positive`. The previous bright acidic lime (`#5fd64d`) was visually inconsistent with the ship sprite. Teal (`#2fbfc9`) left unchanged — it serves a distinct semantic role for explored cells.
+- **Phase-level granular step mode.** Replaced the step-level Granular Step tab with a 5-phase drill-down that decomposes each Q-learning micro-step into Perceive → Decide → Act → Reward → Learn. Each phase has its own detail panel showing all intermediate calculations (sensor readings, epsilon roll, move outcome, reward lookup, full Q-update formula with 8 intermediate values). Controls advance one phase per click (5 phases = 1 full step). New engine layer: `phase-data.ts` (types), `q-matrix.selectActionDetailed()` / `updateDetailed()` (capture intermediates without breaking PRNG determinism), `algorithm-runner.runStepWithPhases()`, extended `WalkthroughStep.phases`. New UI: `PhaseBar.tsx` (pipeline progress bar), `PerceivePanel.tsx`, `DecidePanel.tsx`, `ActPanel.tsx`, `RewardPanel.tsx`, `LearnPanel.tsx`. Removed `full` tab → replaced with `chart` tab (EpisodeChart + Board + StatusBar). Removed "Full Run (advanced) →" button from GettingStartedTab.
+- Renamed "Chart" tab label to **"Full Step"** (tab ID remains `chart`). Updated HelpGlossary controls section — replaced stale "Overview Tab" / "Inspect Tab" / "Walkthrough Tab" entries with current "Full Step Tab" and "Granular Step Tab" descriptions. Updated all CLAUDE.md references from "Chart tab" to "Full Step tab".
+- Fixed board "zoom" animation on tab switch to Granular Step. Root cause: Board.tsx set canvas CSS size via JavaScript (in a `ResizeObserver` callback), which always lagged layout by at least one frame — the canvas was painted at intermediate sizes as flexbox settled. Multiple approaches tried and rejected: minimum-width guards on ResizeObserver (still fired at intermediate widths >50px), opacity-hide-then-reveal (ResizeObserver effect depended on `[draw]` which changed every render, resetting opacity each time), decoupling ResizeObserver from draw via `drawRef` + `[]` deps (fixed the re-creation but canvas still appeared at wrong size before first callback). Final fix: container uses `aspectRatio: '1'` for stable square layout from first frame, canvas fills via CSS (`width/height: 100%`), ResizeObserver only sets buffer resolution (`canvas.width/height * devicePixelRatio`) — JS never touches `canvas.style.width/height`.

@@ -139,9 +139,8 @@ export const HelpGlossary: React.FC<Props> = ({ section }) => (
           <Term term="Back (←)">Undo the last episode (up to 50 undo slots).</Term>
           <Term term="Reset">Return to the configuration screen. All progress is lost.</Term>
           <Term term="Speed Slider">Logarithmic 1–500 episodes/second. Controls auto-play speed.</Term>
-          <Term term="Overview Tab">Configuration, settings summary, and the episode reward chart.</Term>
-          <Term term="Inspect Tab">Perception display and Q-matrix inspector for the current state.</Term>
-          <Term term="Walkthrough Tab">Step-by-step playback of a single episode with board snapshots.</Term>
+          <Term term="Full Step Tab">Episode-level view: board, episode reward chart, and status side by side.</Term>
+          <Term term="Granular Step Tab">Phase-by-phase walkthrough of each Q-learning step: Perceive, Decide, Act, Reward, Learn.</Term>
           <Term term="Hold Help (S)">Press S to pin the current help text. Press S again to unpin.</Term>
         </>
       )}

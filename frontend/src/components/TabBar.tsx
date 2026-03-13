@@ -5,7 +5,7 @@ import { colors } from '../colors';
 // Props
 // ---------------------------------------------------------------------------
 
-export type TabId = 'getting-started' | 'config' | 'full' | 'granular' | 'glossary';
+export type TabId = 'getting-started' | 'config' | 'granular' | 'chart' | 'glossary';
 
 interface TabBarProps {
   activeTab: TabId;
@@ -15,8 +15,8 @@ interface TabBarProps {
 const TABS: { id: TabId; label: string; help: string }[] = [
   { id: 'getting-started', label: 'Getting Started', help: 'Introduction, help bar guide, and quick-start buttons' },
   { id: 'config', label: 'Config', help: 'Q-Learning parameters: epsilon, gamma, eta, episode/step limits, and presets' },
-  { id: 'full', label: 'Full Step', help: 'Episode-level view: board, chart, and status side by side' },
-  { id: 'granular', label: 'Granular Step', help: 'Step-by-step walkthrough: board, perception, Q-values, and move details for each action' },
+  { id: 'granular', label: 'Granular Step', help: 'Phase-by-phase walkthrough: see exactly how Bender perceives, decides, acts, gets rewarded, and learns at each step' },
+  { id: 'chart', label: 'Full Step', help: 'Episode-level view: board, chart, and status side by side' },
   { id: 'glossary', label: 'Help / Glossary', help: 'Reinforcement learning concepts, controls reference, and glossary of terms' },
 ];
 

@@ -12,17 +12,21 @@
 import {
   AlgorithmConfig,
   DEFAULT_CONFIG,
+  Percept,
   MoveType,
   MoveResult,
   DEFAULT_REWARD_CONFIG,
   ALL_MOVES,
+  MOVES_BY_ORDER,
   StepResult,
   EpisodeSummary,
   RewardConfig,
 } from './types';
 import { GameBoard } from './board';
 import { QMatrix } from './q-matrix';
+import { getPerceptionKeyById } from './perception';
 import { createPrngWithState, generateSeed, type StatefulPrng } from './prng';
+import type { PhaseStepData, EncodingDigit } from './phase-data';
 
 /**
  * Lightweight snapshot for undo/redo.
@@ -241,6 +245,171 @@ export class AlgorithmRunner {
     };
 
     return result;
+  }
+
+  /**
+   * Like runStep(), but captures all intermediate phase data for visualization.
+   * Uses selectActionDetailed/updateDetailed to observe decision internals
+   * while maintaining identical PRNG sequence.
+   */
+  runStepWithPhases(): { stepResult: StepResult; phases: PhaseStepData } | null {
+    if (this._algorithmEnded) return null;
+
+    if (this._currentStep >= this.config.stepLimit) {
+      if (this._currentEpisode >= this.config.episodeLimit) {
+        this._algorithmEnded = true;
+        return null;
+      }
+      this.startNewEpisode();
+    }
+
+    this._currentStep++;
+
+    // --- PHASE 0: PERCEIVE ---
+    const perceptionBefore = this.startPerceptionId;
+    const benderPosBefore: [number, number] = [...this.board.getBenderPosition()];
+
+    // Build sensor readings and encoding digits
+    const directionNames = ['Left', 'Right', 'Down', 'Up', 'Here'];
+    const sensorReadings: { direction: string; percept: Percept }[] = [];
+    const encodingDigits: EncodingDigit[] = [];
+    const weights = [81, 27, 9, 3, 1]; // base-3 positional weights for L,R,D,U,Gr
+    const perceptToDigit: Record<string, number> = {
+      [Percept.Wall]: 0,
+      [Percept.Empty]: 1,
+      [Percept.Can]: 2,
+    };
+
+    for (let i = 0; i < MOVES_BY_ORDER.length; i++) {
+      const move = MOVES_BY_ORDER[i];
+      const percept = this.board.getPercept(move);
+      sensorReadings.push({ direction: directionNames[i], percept });
+      const digitValue = perceptToDigit[percept];
+      encodingDigits.push({
+        direction: directionNames[i],
+        percept,
+        digitValue,
+        weight: weights[i],
+        contribution: digitValue * weights[i],
+      });
+    }
+
+    const perceiveData = {
+      benderPosition: benderPosBefore,
+      sensorReadings,
+      perceptionKey: this.board.getPerceptionState(),
+      perceptionId: perceptionBefore,
+      encodingDigits,
+    };
+
+    // --- PHASE 1: DECIDE ---
+    const decideData = this.qMatrix.selectActionDetailed(
+      perceptionBefore,
+      this._currentEpsilon,
+      this.prng.next,
+    );
+    const actionIndex = decideData.chosenActionIndex;
+    const move = ALL_MOVES[actionIndex];
+
+    // --- PHASE 2: ACT ---
+    const moveResult = this.board.applyMove(move);
+    const benderPosAfter: [number, number] = [...this.board.getBenderPosition()];
+
+    const actData = {
+      move,
+      moveResult,
+      benderPositionBefore: benderPosBefore,
+      benderPositionAfter: benderPosAfter,
+    };
+
+    // --- PHASE 3: REWARD ---
+    const reward = this.rewardConfig[moveResult];
+    const episodeRewardBefore = this._episodeReward;
+
+    this._episodeReward += reward;
+    this._totalReward += reward;
+    if (moveResult === MoveResult.CanCollected) {
+      this._cansCollected++;
+    }
+
+    const rewardData = {
+      moveResult,
+      reward,
+      rewardConfig: { ...this.rewardConfig },
+      episodeRewardBefore,
+      episodeRewardAfter: this._episodeReward,
+    };
+
+    // --- PHASE 4: LEARN ---
+    const perceptionAfter = this.board.getPerceptionStateId();
+
+    const updateResult = this.qMatrix.updateDetailed(
+      perceptionBefore,
+      perceptionAfter,
+      actionIndex,
+      reward,
+      this.config.gamma,
+      this.config.eta,
+      this._currentStep,
+    );
+
+    const learnData = {
+      perceptionBefore,
+      perceptionAfter,
+      perceptionBeforeKey: getPerceptionKeyById(perceptionBefore),
+      perceptionAfterKey: getPerceptionKeyById(perceptionAfter),
+      actionIndex,
+      actionName: move,
+      stepNumber: this._currentStep,
+      oldBestValue: updateResult.oldBestValue,
+      newBestValue: updateResult.newBestValue,
+      difference: updateResult.difference,
+      gamma: this.config.gamma,
+      eta: this.config.eta,
+      discountFactor: updateResult.discountFactor,
+      discountedDifference: updateResult.discountedDifference,
+      baseReward: reward,
+      combined: updateResult.combined,
+      finalValue: updateResult.finalValue,
+      wasUpdated: updateResult.wasUpdated,
+      qRowBefore: updateResult.qRowBefore,
+      qRowAfter: updateResult.qRowAfter,
+    };
+
+    // Update starting perception for the next step
+    this.startPerceptionId = perceptionAfter;
+
+    // Check for algorithm end
+    if (
+      this._currentStep >= this.config.stepLimit &&
+      this._currentEpisode >= this.config.episodeLimit
+    ) {
+      this._algorithmEnded = true;
+    }
+
+    const stepResult: StepResult = {
+      episodeNumber: this._currentEpisode,
+      stepNumber: this._currentStep,
+      benderPosition: benderPosAfter,
+      move,
+      moveResult,
+      reward,
+      episodeReward: this._episodeReward,
+      cansCollected: this._cansCollected,
+      perception: this.board.getPerceptionState(),
+      wasRandomMove: decideData.isExploring,
+    };
+
+    return {
+      stepResult,
+      phases: {
+        perceive: perceiveData,
+        decide: decideData,
+        act: actData,
+        reward: rewardData,
+        learn: learnData,
+      },
+    };
   }
 
   // --------------------------------------------------------------------------

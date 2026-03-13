@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { colors } from '../colors';
 import { Board } from './Board';
 import { GameBoard } from '../engine/board';
 import { mulberry32 } from '../engine/prng';
+import { AlgorithmRunner } from '../engine/algorithm-runner';
+import { DEFAULT_CONFIG } from '../engine/types';
 import type { BoardState } from '../hooks/use-buffered-algorithm';
 
-// Static preview board — fixed seed so the Getting Started tab always shows the
-// same populated grid (cans + Bender) before the user starts training.
+// Static preview board — shown as initial frame before the live simulation starts ticking.
 const PREVIEW_BOARD: BoardState = (() => {
   const rng = mulberry32(42);
   const board = new GameBoard(rng);
@@ -20,7 +21,6 @@ const PREVIEW_BOARD: BoardState = (() => {
 
 interface Props {
   onStartGranular: () => void;
-  onStartFull: () => void;
   onOpenGlossary: () => void;
 }
 
@@ -28,7 +28,71 @@ interface Props {
 // Main component
 // ---------------------------------------------------------------------------
 
-export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFull, onOpenGlossary }) => {
+export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onOpenGlossary }) => {
+  // Live simulation — Bender genuinely learns over time via a real AlgorithmRunner.
+  const runnerRef = useRef<AlgorithmRunner | null>(null);
+  const [boardState, setBoardState] = useState<BoardState>(PREVIEW_BOARD);
+  const [visitedCells, setVisitedCells] = useState<Set<string>>(new Set());
+  const visitedRef = useRef<Set<string>>(new Set());
+  const episodeRef = useRef<number>(-1);
+
+  useEffect(() => {
+    const runner = new AlgorithmRunner({ ...DEFAULT_CONFIG, seed: 42 });
+    runnerRef.current = runner;
+
+    const init = runner.getCurrentState();
+    setBoardState({ board: init.board, benderPosition: init.benderPosition, perceptionKey: init.perceptionKey });
+
+    const STEP_MS = 150;
+    const EPISODE_PAUSE_MS = 800;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = () => {
+      const r = runnerRef.current;
+      if (!r) return;
+
+      const step = r.runStep();
+      if (!step) {
+        if (intervalId) clearInterval(intervalId);
+        return;
+      }
+
+      // Detect episode transition → reset visited cells, pause briefly
+      if (step.episodeNumber !== episodeRef.current) {
+        if (episodeRef.current !== -1) {
+          if (intervalId) { clearInterval(intervalId); intervalId = null; }
+          visitedRef.current = new Set();
+          visitedRef.current.add(`${step.benderPosition[0]},${step.benderPosition[1]}`);
+          const s = r.getCurrentState();
+          setBoardState({ board: s.board, benderPosition: s.benderPosition, perceptionKey: s.perceptionKey });
+          setVisitedCells(new Set(visitedRef.current));
+          episodeRef.current = step.episodeNumber;
+
+          timeoutId = setTimeout(() => {
+            intervalId = setInterval(tick, STEP_MS);
+          }, EPISODE_PAUSE_MS);
+          return;
+        }
+        episodeRef.current = step.episodeNumber;
+      }
+
+      // Normal step
+      visitedRef.current.add(`${step.benderPosition[0]},${step.benderPosition[1]}`);
+      const s = r.getCurrentState();
+      setBoardState({ board: s.board, benderPosition: s.benderPosition, perceptionKey: s.perceptionKey });
+      setVisitedCells(new Set(visitedRef.current));
+    };
+
+    intervalId = setInterval(tick, STEP_MS);
+
+    return () => {
+      runnerRef.current = null;
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
   return (
     <div style={styles.container}>
       <div style={styles.inner}>
@@ -40,9 +104,6 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
               <div style={styles.buttonRow}>
                 <button style={styles.primaryBtn} onClick={onStartGranular}>
                   Watch Bender Learn →
-                </button>
-                <button style={styles.secondaryBtn} onClick={onStartFull}>
-                  Full Run (advanced) →
                 </button>
               </div>
               <p style={styles.ctaHint}>
@@ -127,7 +188,7 @@ export const GettingStartedTab: React.FC<Props> = ({ onStartGranular, onStartFul
           <div style={styles.rightCol}>
             <div style={styles.boardWidget}>
               <div style={styles.boardLabel}>Bender's 10×10 Grid</div>
-              <Board boardState={PREVIEW_BOARD} />
+              <Board boardState={boardState} visitedCells={visitedCells} />
               <p style={styles.boardHint}>
                 Bender perceives 5 adjacent cells (N/S/E/W + current), each as Wall, Can, or Empty.
                 With 3⁵ = 243 possible perceptions and 5 actions, the Q-matrix has 1,215 entries to learn.
