@@ -23,23 +23,61 @@ import { QMatrix } from './engine/q-matrix';
 import { PHASE_COUNT } from './engine/phase-data';
 
 // ---------------------------------------------------------------------------
+// URL ↔ Tab routing helpers
+// ---------------------------------------------------------------------------
+
+const VALID_TABS: TabId[] = ['getting-started', 'config', 'granular', 'chart', 'glossary'];
+
+/** Map URL path to tab id. Unknown paths fall back to 'getting-started'. */
+const tabFromPath = (path: string): TabId => {
+  const slug = path.replace(/^\//, '').toLowerCase();
+  return (VALID_TABS as string[]).includes(slug) ? slug as TabId : 'getting-started';
+};
+
+/** Map tab id to URL path. Default tab maps to '/'. */
+const pathFromTab = (tab: TabId): string => (tab === 'getting-started' ? '/' : `/${tab}`);
+
+// ---------------------------------------------------------------------------
 // App Component
 // ---------------------------------------------------------------------------
 
 const App: React.FC = () => {
   const algorithm = useBufferedAlgorithm();
-  const [activeTab, setActiveTab] = useState<TabId>('getting-started');
+  const [activeTab, setActiveTab] = useState<TabId>(() => tabFromPath(window.location.pathname));
   const [stepIndex, setStepIndex] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [helpSection, setHelpSection] = useState<HelpSectionId>('problem');
   const [microPlaying, setMicroPlaying] = useState(false);
   const microIntervalRef = useRef<number | null>(null);
+  const [playSpeed, setPlaySpeed] = useState(3);
+
+  // Push URL when tab changes
+  const navigateTab = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+    const target = pathFromTab(tab);
+    if (window.location.pathname !== target) {
+      window.history.pushState(null, '', target);
+    }
+  }, []);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const onPopState = () => setActiveTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const handlePlaySpeedChange = useCallback((newSpeed: number) => {
+    setPlaySpeed(newSpeed);
+    algorithm.setClockSpeed(newSpeed);
+  }, [algorithm]);
 
   const handleStart = useCallback(
     (config: AlgorithmConfig) => {
       algorithm.start(config);
+      algorithm.setClockSpeed(playSpeed);
     },
-    [algorithm],
+    [algorithm, playSpeed],
   );
 
   const handleReset = useCallback(() => {
@@ -72,13 +110,13 @@ const App: React.FC = () => {
         e.preventDefault();
         algorithm.start(DEFAULT_CONFIG);
         algorithm.setCaptureSteps(true);
-        setActiveTab('granular');
+        navigateTab('granular');
         algorithm.step();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasStarted, algorithm]);
+  }, [hasStarted, algorithm, navigateTab]);
 
   // Stop micro play when leaving granular tab
   useEffect(() => {
@@ -89,34 +127,6 @@ const App: React.FC = () => {
 
   // --- Granular (phase-level) callbacks ---
 
-  const handleGranularStep = useCallback(() => {
-    const history = algorithm.lastStepHistory;
-    if (!history || history.length === 0) {
-      // No episode yet — compute first one
-      algorithm.step();
-      return;
-    }
-
-    const maxStepIndex = history.length - 1;
-
-    if (phaseIndex < PHASE_COUNT - 1) {
-      // Advance to next phase within the same step
-      setPhaseIndex(prev => prev + 1);
-    } else {
-      // At last phase — advance to next step, phase 0
-      if (stepIndex < maxStepIndex) {
-        setStepIndex(prev => prev + 1);
-        setPhaseIndex(0);
-      } else {
-        // At last step of episode — advance to next episode
-        if (!algorithm.algorithmEnded) {
-          algorithm.step();
-          // stepIndex and phaseIndex reset via the useEffect on lastStepHistory
-        }
-      }
-    }
-  }, [algorithm, stepIndex, phaseIndex]);
-
   const handleGranularStepN = useCallback((count: number) => {
     const history = algorithm.lastStepHistory;
     if (!history || history.length === 0) {
@@ -125,10 +135,20 @@ const App: React.FC = () => {
     }
 
     const maxStepIndex = history.length - 1;
-    // Calculate total phase position and advance
-    let totalPhasePos = stepIndex * PHASE_COUNT + phaseIndex + count;
+    const totalPhasePos = stepIndex * PHASE_COUNT + phaseIndex + count;
     const maxPhasePos = maxStepIndex * PHASE_COUNT + (PHASE_COUNT - 1);
-    totalPhasePos = Math.min(totalPhasePos, maxPhasePos);
+
+    if (totalPhasePos > maxPhasePos) {
+      // Would go past end of episode — advance to next episode
+      if (!algorithm.algorithmEnded) {
+        algorithm.step();
+        // stepIndex and phaseIndex reset via the useEffect on lastStepHistory
+      } else {
+        setStepIndex(maxStepIndex);
+        setPhaseIndex(PHASE_COUNT - 1);
+      }
+      return;
+    }
 
     const newStepIndex = Math.floor(totalPhasePos / PHASE_COUNT);
     const newPhaseIndex = totalPhasePos % PHASE_COUNT;
@@ -159,8 +179,8 @@ const App: React.FC = () => {
   }, []);
 
   // Ref to avoid stale closure in interval
-  const granularStepRef = useRef(handleGranularStep);
-  granularStepRef.current = handleGranularStep;
+  const granularStepNRef = useRef(handleGranularStepN);
+  granularStepNRef.current = handleGranularStepN;
 
   // Micro auto-play interval (drives phase-level advancement)
   useEffect(() => {
@@ -172,9 +192,10 @@ const App: React.FC = () => {
       if (algorithm.algorithmEnded) setMicroPlaying(false);
       return;
     }
-    const delay = Math.max(1, 501 - algorithm.speed);
+    const batchSize = algorithm.speed;
+    const delay = Math.max(1, Math.round(1000 / playSpeed));
     microIntervalRef.current = window.setInterval(() => {
-      granularStepRef.current();
+      granularStepNRef.current(batchSize);
     }, delay);
     return () => {
       if (microIntervalRef.current != null) {
@@ -182,7 +203,7 @@ const App: React.FC = () => {
         microIntervalRef.current = null;
       }
     };
-  }, [microPlaying, algorithm.speed, algorithm.algorithmEnded]);
+  }, [microPlaying, algorithm.speed, playSpeed, algorithm.algorithmEnded]);
 
   // Reconstruct per-step QMatrix for granular tab
   const granularQMatrix = useMemo(() => {
@@ -196,15 +217,15 @@ const App: React.FC = () => {
   // --- Navigation callbacks ---
 
   const handleOpenGlossary = useCallback((_termId?: string) => {
-    setActiveTab('glossary');
-  }, []);
+    navigateTab('glossary');
+  }, [navigateTab]);
 
   const handleStartGranular = useCallback(() => {
     if (!hasStarted) {
       algorithm.start(DEFAULT_CONFIG);
     }
-    setActiveTab('granular');
-  }, [hasStarted, algorithm]);
+    navigateTab('granular');
+  }, [hasStarted, algorithm, navigateTab]);
 
   return (
     <div style={styles.app}>
@@ -231,12 +252,14 @@ const App: React.FC = () => {
               isRunning={isGranular ? microPlaying : algorithm.running}
               onPlay={isGranular ? handleGranularPlay : algorithm.resume}
               onPause={isGranular ? handleGranularPause : algorithm.pause}
-              onStep={isGranular ? handleGranularStep : algorithm.step}
-              onStepN={isGranular ? handleGranularStepN : algorithm.stepN}
+              onStep={isGranular ? () => handleGranularStepN(algorithm.speed) : () => algorithm.stepN(algorithm.speed)}
+              onStepN={isGranular ? (c: number) => handleGranularStepN(c * algorithm.speed) : (c: number) => algorithm.stepN(c * algorithm.speed)}
               onBack={isGranular ? handleGranularBack : algorithm.goBack}
               onReset={handleReset}
-              speed={algorithm.speed}
-              onSpeedChange={algorithm.setSpeed}
+              batchSize={algorithm.speed}
+              onBatchSizeChange={algorithm.setSpeed}
+              playSpeed={playSpeed}
+              onPlaySpeedChange={handlePlaySpeedChange}
               hasStarted={hasStarted}
               algorithmEnded={algorithm.algorithmEnded}
               canGoBack={isGranular ? (phaseIndex > 0 || stepIndex > 0 || algorithm.canGoBack) : algorithm.canGoBack}
@@ -252,7 +275,7 @@ const App: React.FC = () => {
       <div style={styles.main}>
         {/* Left sidebar: vertical tabs */}
         <div style={styles.leftSidebar}>
-          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <TabBar activeTab={activeTab} onTabChange={navigateTab} />
           <img
             src="/sprites/spaceship.png"
             alt=""

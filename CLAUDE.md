@@ -297,7 +297,8 @@ Wires the engine layer (AlgorithmRunner + EpisodeBuffer + AnimationClock) to Rea
 - `stepN(count)` — batch advance. Synchronous computation, sweep animation to final position.
 - `goBack()` — pop undo stack, restore algorithm state (Q-matrix + PRNG + counters), trim summaries, snap playhead. Pushes consumed entry to redo stack.
 - `reset()` — clear everything, return to initial state
-- `setSpeed(speed)` — update clock speed and buffer batch size
+- `setSpeed(speed)` — update batch size state and buffer computation batch size (does NOT affect AnimationClock)
+- `setClockSpeed(uiSpeed)` — update AnimationClock playback rate (separated from batch size)
 - `setCaptureSteps(enabled)` — toggle step-by-step capture on the buffer
 
 **Undo/Redo Architecture:**
@@ -346,6 +347,8 @@ The main layout follows the eight-queens sidebar+content pattern:
 - Left sidebar: vertical `TabBar` + Planet Express ship image (bottom, decorative, 120×90px, 40% opacity)
 - Optional secondary sidebar: glossary section picker (only on glossary tab)
 - Tab content area: `flex: 1`, scrolls independently
+
+**Client-side URL routing** via History API (pushState/popstate, no library). `tabFromPath()` maps URL slugs to `TabId` (unknown paths fall back to `getting-started`), `pathFromTab()` maps the default tab to `/` and all others to `/{tabId}`. `navigateTab` callback replaces all direct `setActiveTab` calls — updates state and pushes URL. A `popstate` listener handles browser back/forward. `staticwebapp.config.json` has `navigationFallback` rewriting all paths to `index.html`.
 
 **Quick-start callbacks:** The Getting Started tab has buttons that auto-start with `DEFAULT_CONFIG` and switch to the appropriate tab.
 
@@ -449,9 +452,9 @@ Flat horizontal bar in the sticky top section (only visible after training start
 |--------|----------|--------|-------|
 | Play/Pause | Space | Toggle episode playback | Green |
 | Back | Left arrow | Undo last episode | Purple |
-| Step | Right arrow | Advance 1 episode | Blue |
-| +10 | Shift+Right | Advance 10 episodes | Blue |
-| +100 | — | Advance 100 episodes | Dark blue |
+| Step | Right arrow | Advance `batchSize` episodes | Blue |
+| +10 | Shift+Right | Advance `10 × batchSize` episodes | Blue |
+| +100 | — | Advance `100 × batchSize` episodes | Dark blue |
 | Reset | — | Return to config screen | Red |
 
 **Buttons (phase mode — Granular Step tab):**
@@ -460,13 +463,16 @@ Flat horizontal bar in the sticky top section (only visible after training start
 |--------|----------|--------|
 | Play/Pause | Space | Toggle phase auto-play (setInterval-driven) |
 | Back | Left arrow | Go back 1 phase; if at phase 0 step 0, undo episode |
-| Step | Right arrow | Advance 1 phase; wraps to next step at phase 4, next episode at last step |
-| +10 | Shift+Right | Advance 10 phases (wrapping across steps) |
-| +100 | — | Advance 100 phases (wrapping across steps) |
+| Step | Right arrow | Advance `batchSize` phases; wraps to next episode at end |
+| +10 | Shift+Right | Advance `10 × batchSize` phases (wrapping across episodes) |
+| +100 | — | Advance `100 × batchSize` phases (wrapping across episodes) |
 
-**Speed slider:** Logarithmic scale from 1 to 500. Display shows "ep/s" in episode mode, "phases/s" in phase mode.
+**Two sliders:**
 
-**Props:** `isMicro?: boolean` — when true, speed label shows "phases/s" and help text reflects phase mode.
+1. **Batch size** (green, logarithmic 1–500) — controls how many phases (granular) or episodes (full step) advance per Step press. At batch=5 in granular mode, each Step press advances one full Q-learning step (5 phases). +10/+100 buttons multiply: +10 at batch=5 = 50 phases. Values are click-to-edit for direct text entry.
+2. **Playback speed** (orange, logarithmic 0.25–500) — controls auto-play rate when Play is active. In granular mode, drives the `setInterval` tick rate. In episode mode, drives the AnimationClock rate. Values below 1 snap to quarter increments (0.25, 0.5, 0.75). Also click-to-edit.
+
+**Props:** `batchSize`, `onBatchSizeChange`, `playSpeed`, `onPlaySpeedChange`, `isMicro?: boolean` — `isMicro` changes suffix labels (phases/step vs ep/step, ticks/s vs ep/s).
 
 **Keyboard shortcuts** (registered via `useEffect` + `keydown` listener):
 - Space: Play/Pause (only when algorithm is active and not ended)
@@ -743,8 +749,8 @@ When the user clicks Step or Step-N, the clock enters sweep mode: it animates th
 | Key | Action (Full Step tab) | Action (Granular Step tab) | Context |
 | ----- | ------------------------ | --------------------------- | --------- |
 | Space | Play / Pause episodes | Play / Pause phases | Only when algorithm started and not ended |
-| → | Step one episode | Step one phase (wraps across steps/episodes) | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
-| Shift+→ | Step 10 episodes | Step 10 phases (wrapping) | Only when paused |
+| → | Step `batchSize` episodes | Step `batchSize` phases (wraps across episodes) | Auto-starts with DEFAULT_CONFIG if not started; otherwise only when paused |
+| Shift+→ | Step `10 × batchSize` episodes | Step `10 × batchSize` phases (wrapping) | Only when paused |
 | ← | Back (undo episode) | Back one phase (undo episode at step 0, phase 0) | Only when paused and undo/phase available |
 | S | Pin/unpin help text | Pin/unpin help text | Always (except when typing in inputs) |
 
@@ -917,8 +923,19 @@ Reverse-chronological record of significant changes, decisions, and context that
 - Fixed visited cell (teal border) highlights not updating when stepping backward in Granular Step tab. Board's internal `visitedRef` Set only grew — never shrank on backward navigation. Added optional `visitedCells?: Set<string>` prop to Board. App.tsx computes the set from `lastStepHistory[0..stepIndex]` positions so stepping backward correctly removes teal highlights from cells Bender hasn't visited yet at that step. Internal `visitedRef` tracking is skipped when the prop is provided. Full Step tab and Getting Started tab are unaffected (no prop passed, use internal tracking).
 - Fixed subtle vertical layout shift in Granular Step tab when stepping the first episode. The StepWalkthrough slider row changed height between placeholder text ("Click > to step the first episode") and the actual `<input type="range">` — placeholder could wrap at narrow widths, and bold vs normal-weight values in detail rows had slightly different line heights. Fixed by adding explicit `height: 28` on the slider row and `height: 22` on each detail row, plus `whiteSpace: nowrap` on the placeholder text. This eliminates the ~2px shift that caused QMatrixInspector to jump up.
 - Added decorative Futurama images sourced from the original C# repo on GitHub (`nelsong6/BenderWorld`). Planet Express ship (`spaceship.png`, resized from 1024×768 to 120×90) in the left sidebar below the tab bar, pushed to bottom via `marginTop: 'auto'`, 40% opacity. Fry squinting (`fry-squinting.png`, 41×57) in the header bar far right, 64px display height, aligned flush with the header's bottom border via `alignSelf: 'flex-end'` + `marginBottom: -12`, 50% opacity. Both are `pointerEvents: 'none'` decorations.
-- Made Controls bar (Play/Back/Step/+10/+100) operate at micro-step granularity when the Granular Step tab is active. Previously all controls always advanced full episodes, forcing users to use the small `< >` buttons in StepWalkthrough. Now App.tsx wraps the Controls callbacks based on `activeTab === 'granular'`: Step advances one micro-step within the episode (advancing to next episode at end), Back goes back one step (undoing the episode at step 0), +10/+100 jump N steps clamped to episode end. Play uses a `setInterval`-based auto-advance loop (`microPlaying` state + `microIntervalRef`) instead of the AnimationClock pipeline. Speed slider label dynamically shows "steps/s" vs "ep/s". Controls.tsx gained a minimal `isMicro` prop for the label; all behavioral logic lives in App.tsx. Safety effects stop micro-play on tab switch, reset, and algorithm end.
+- Made Controls bar (Play/Back/Step/+10/+100) operate at micro-step granularity when the Granular Step tab is active. Previously all controls always advanced full episodes, forcing users to use the small `< >` buttons in StepWalkthrough. Now App.tsx wraps the Controls callbacks based on `activeTab === 'granular'`: Step advances one micro-step within the episode (advancing to next episode at end), Back goes back one step (undoing the episode at step 0), +10/+100 jump N steps clamped to episode end. Play uses a `setInterval`-based auto-advance loop (`microPlaying` state + `microIntervalRef`) instead of the AnimationClock pipeline. Controls.tsx gained a minimal `isMicro` prop for the label; all behavioral logic lives in App.tsx. Safety effects stop micro-play on tab switch, reset, and algorithm end.
 - Replaced all green accent colors with muted sage-green (`#5a8e70`) to match the Planet Express ship hull color. Changed 7 values in `colors.ts`: `accent.green`, `accent.greenLight`, `board.currentBorder`, `chart.rewardLine/Glow/Fill`, `qValue.positive`. The previous bright acidic lime (`#5fd64d`) was visually inconsistent with the ship sprite. Teal (`#2fbfc9`) left unchanged — it serves a distinct semantic role for explored cells.
 - **Phase-level granular step mode.** Replaced the step-level Granular Step tab with a 5-phase drill-down that decomposes each Q-learning micro-step into Perceive → Decide → Act → Reward → Learn. Each phase has its own detail panel showing all intermediate calculations (sensor readings, epsilon roll, move outcome, reward lookup, full Q-update formula with 8 intermediate values). Controls advance one phase per click (5 phases = 1 full step). New engine layer: `phase-data.ts` (types), `q-matrix.selectActionDetailed()` / `updateDetailed()` (capture intermediates without breaking PRNG determinism), `algorithm-runner.runStepWithPhases()`, extended `WalkthroughStep.phases`. New UI: `PhaseBar.tsx` (pipeline progress bar), `PerceivePanel.tsx`, `DecidePanel.tsx`, `ActPanel.tsx`, `RewardPanel.tsx`, `LearnPanel.tsx`. Removed `full` tab → replaced with `chart` tab (EpisodeChart + Board + StatusBar). Removed "Full Run (advanced) →" button from GettingStartedTab.
 - Renamed "Chart" tab label to **"Full Step"** (tab ID remains `chart`). Updated HelpGlossary controls section — replaced stale "Overview Tab" / "Inspect Tab" / "Walkthrough Tab" entries with current "Full Step Tab" and "Granular Step Tab" descriptions. Updated all CLAUDE.md references from "Chart tab" to "Full Step tab".
 - Fixed board "zoom" animation on tab switch to Granular Step. Root cause: Board.tsx set canvas CSS size via JavaScript (in a `ResizeObserver` callback), which always lagged layout by at least one frame — the canvas was painted at intermediate sizes as flexbox settled. Multiple approaches tried and rejected: minimum-width guards on ResizeObserver (still fired at intermediate widths >50px), opacity-hide-then-reveal (ResizeObserver effect depended on `[draw]` which changed every render, resetting opacity each time), decoupling ResizeObserver from draw via `drawRef` + `[]` deps (fixed the re-creation but canvas still appeared at wrong size before first callback). Final fix: container uses `aspectRatio: '1'` for stable square layout from first frame, canvas fills via CSS (`width/height: 100%`), ResizeObserver only sets buffer resolution (`canvas.width/height * devicePixelRatio`) — JS never touches `canvas.style.width/height`.
+
+### 2026-03-13
+
+- **Split speed slider into Batch + Speed.** The single speed slider previously controlled both playback rate and was mislabeled (displayed "N steps/s" but used formula `501 - N` which didn't match). Replaced with two independent sliders: **Batch** (green, 1–500, controls how many phases/episodes per Step press — at batch=5 in granular mode, each press = one full Q-learning step) and **Speed** (orange, 0.25–500, controls auto-play tick rate). Both values are click-to-edit for direct text entry via `EditableValue` sub-component (span always rendered for layout stability, input overlays absolutely when editing). Speed slider minimum is 0.25 (4 seconds per tick), fractional values below 1 snap to quarter increments.
+- **Separated batch size from clock speed in the hook.** `use-buffered-algorithm.ts` `setSpeed` now only updates batch size state + buffer computation batch size. New `setClockSpeed` method updates only the AnimationClock rate. App.tsx owns `playSpeed` as local state and syncs it to the clock via `setClockSpeed`.
+- **Removed `handleGranularStep` (single-phase advance).** All granular stepping now goes through `handleGranularStepN(count)`, which also handles episode boundaries (advances to next episode when batch overflows instead of clamping and getting stuck). Previously `handleGranularStepN` clamped to the episode end, causing auto-play to freeze at the last phase.
+- **Micro-play interval uses fixed tick rate.** Previously interval delay was `501 - speed` (broken formula). Now fires at `1000 / playSpeed` ms per tick, advancing `batchSize` phases per tick. `playSpeed` and `batchSize` are independent — higher batch = more work per tick, higher speed = more ticks per second.
+
+### 2026-03-16
+
+- **Client-side URL routing via History API.** Added `tabFromPath()`/`pathFromTab()` helpers and a `navigateTab` callback that calls `setActiveTab` + `history.pushState`. Default tab (`getting-started`) maps to `/`, all others to `/{tabId}`. A `popstate` listener handles browser back/forward. All `setActiveTab` call sites (TabBar `onTabChange`, `handleOpenGlossary`, `handleStartGranular`, pre-start arrow-key shortcut) replaced with `navigateTab`. `staticwebapp.config.json` already had `navigationFallback` with `rewrite: "/index.html"`. Pattern matches kill-me implementation.

@@ -113,7 +113,6 @@ export function useBufferedAlgorithm() {
 
     const buffer = new EpisodeBuffer(config);
     const clock = new AnimationClock();
-    clock.setSpeed(speed);
 
     bufferRef.current = buffer;
     clockRef.current = clock;
@@ -353,8 +352,11 @@ export function useBufferedAlgorithm() {
 
   const handleSpeedChange = useCallback((newSpeed: number) => {
     setSpeedState(newSpeed);
-    if (clockRef.current) clockRef.current.setSpeed(newSpeed);
     if (bufferRef.current) bufferRef.current.setBatchSize(Math.ceil(newSpeed / 100));
+  }, []);
+
+  const setClockSpeed = useCallback((uiSpeed: number) => {
+    if (clockRef.current) clockRef.current.setSpeed(uiSpeed);
   }, []);
 
   const reset = useCallback(() => {
@@ -400,6 +402,7 @@ export function useBufferedAlgorithm() {
     running,
     speed,
     setSpeed: handleSpeedChange,
+    setClockSpeed,
     currentEpisode,
     currentStep,
     episodeReward,
